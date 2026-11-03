@@ -1,0 +1,29 @@
+# stdout is the MCP JSON-RPC channel: no banner, no console logging (mcp-server-tools skill).
+spring:
+  application:
+    name: fin-track-mcp
+  main:
+    banner-mode: off
+    web-application-type: none
+  datasource:
+    url: jdbc:sqlite:${finance.storage.path}
+  ai:
+    mcp:
+      server:
+        stdio: true
+        name: finance-mcp
+        version: @project.version@
+        type: SYNC
+
+finance:
+  storage:
+    path: ${user.home}/.fin-track-mcp/finance.db
+
+logging:
+  console:
+    enabled: false
+  file:
+    name: ${user.home}/.fin-track-mcp/logs/server.log
+  level:
+    root: WARN
+    com.artyomh.finance: INFO

@@ -1,0 +1,29 @@
+{
+  "skill_name": "resolve-duplicates",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "SpendingService, ComparisonService and SubscriptionService each hand-roll the same 12-line block that filters a month's transactions to EXPENSE, groups them by category and sums amountAmd with setScale(2, HALF_UP). Can you resolve these duplicates?",
+      "expected_output": "The agent searches every module for further copies (including tests and mockdata), confirms they are behaviourally identical (same Direction filter, same scale and RoundingMode, BigDecimal summed with add not doubles), moves the logic into one home in the innermost module the callers share — a method in application (e.g. on SpendingService or a small collaborator the services take via constructor), or a domain method if it is pure aggregation over Transaction — parameterized by the month/transactions, refactors all three services to call it, and runs ./mvnw -q -pl application -am test. It does NOT create a static FinanceUtils class, an AbstractReportService base class, or put the logic in mcp-server or an adapter.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "The month-parsing and 'No data for 2026-03. Available: 2026-05 to 2026-10' error building is copy-pasted in SpendingByCategoryTool, TopMerchantsTool and UnusualTransactionsTool. Please DRY it up.",
+      "expected_output": "The agent finds every tool with the same logic (compare_months and search_transactions likely too), separates the two concerns: YYYY-MM input validation and the actionable error message are MCP-layer concerns and get one home in mcp-server, while 'which months have data' is a use-case query that belongs in application (e.g. the service behind list_months) — never in the persistence adapter called directly by tools. It preserves each tool's early-return/throw behaviour, keeps each tool a single service call, and verifies with tests.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "EvocaXlsxParser and GenericCsvParser both contain a private 8-line parseAmount(String) that strips thousands separators and returns a BigDecimal. Dedup it — maybe an AbstractStatementParser?",
+      "expected_output": "The agent recognises a tiny (≲15-line) helper and explains that CLAUDE.md treats this duplication as deliberate (no micro utility classes), and that an AbstractStatementParser base class fails the abstraction-design gate (the StatementParser port is the abstraction; shared shape is not dispatch). It checks for subtle differences (separator, decimal mark, scale per bank format) and leaves both copies unless it finds a third copy or the logic belongs naturally on Money in domain (e.g. a Money.parse factory); it does not create an AmountUtils class or a base class.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "ImportService checks whether a description contains 'YANDEX' or 'GG TAXI' to set TRANSPORT before calling the categorizer, and SubscriptionService has a similar contains('NETFLIX') check. Clean this duplication up.",
+      "expected_output": "The agent identifies these as duplicates of categorization logic that belongs in the CategorizationRule chain in domain, removes the ad-hoc checks, and expresses them as merchant/keyword rule data (whole-word matching, so 'ENA' does not match 'OPENAI'), keeping rule order Override → Merchant → Keyword → fallback OTHER. It verifies that categorization outcomes are unchanged for the mock statement with domain tests that need no Spring context, and does not add a boolean parameter or a new Category value.",
+      "files": []
+    }
+  ]
+}
