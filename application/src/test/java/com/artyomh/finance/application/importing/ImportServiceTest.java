@@ -182,7 +182,7 @@ class ImportServiceTest {
     private CategorizerFactory categorizers() {
         SequencedMap<Category, List<String>> keywords = new LinkedHashMap<>();
         keywords.put(Category.GROCERIES, List.of("SUPERMARKET"));
-        return new CategorizerFactory(overrides, new KnownMerchantRule(Map.of()), new KeywordRule(keywords));
+        return new CategorizerFactory(overrides, List.of(new KnownMerchantRule(Map.of()), new KeywordRule(keywords)));
     }
 
     private static ExchangeRateProvider fixedUsdRate() {

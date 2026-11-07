@@ -44,6 +44,10 @@ CLAUDE.local.md
 statements/
 /*.xlsx
 /*.csv
+# real statements go in data/real/; only the generated mock files are committed
+data/*
+!data/mock-evoca-2026-05-to-10.xlsx
+!data/mock-evoca-2026-05-to-10.csv
 
 ### OS / logs ###
 .DS_Store

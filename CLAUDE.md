@@ -12,9 +12,10 @@ Design deck (source of the decisions below): https://claude.ai/artifact/AJJgpoyA
 testable without Spring or MCP; the MCP layer only translates tool calls into service calls. The server never writes
 prose — it returns numbers and structured data; Claude decides which tools to call and writes the explanation.
 
-> **Current state:** `domain` (model, categorization, merchant cleaning) and `application` (import, spending,
-> comparison, subscriptions, ports) are built and unit-tested. Adapters, mock data and MCP tools are next;
-> `FinanceMcpApplication` is still an MCP server over STDIO with zero tools.
+> **Current state:** `domain` (model, categorization with built-in defaults, merchant cleaning), `application`
+> (import, spending, comparison, subscriptions, ports) and `mockdata` (scenario → generator → writers, CLI) are built
+> and unit-tested. Adapters and MCP tools are next; `FinanceMcpApplication` is still an MCP server over STDIO with
+> zero tools.
 
 ## Module boundaries (strict, hexagonal — dependencies point inward)
 
@@ -26,7 +27,7 @@ prose — it returns numbers and structured data; Claude decides which tools to 
 | `adapter-parser` | `EvocaXlsxParser` (Apache POI), `GenericCsvParser` (Commons CSV), `ParserFactory` (picks the parser from file headers) | application |
 | `adapter-persistence` | `SqliteTransactionRepository` etc. (`JdbcClient`), Flyway migrations (`src/main/resources/db/migration`) | application |
 | `adapter-fx` | `FixedRateProvider` (rate from config); later `CbaRateProvider` + cache | application |
-| `mockdata` | Generator for fake Evoca-style statements (fixed random seed); used by tests as fixtures and for demos | domain |
+| `mockdata` | Fake Evoca-style statements: `scenario` (data, `Scenarios`) → `generator` (rows + balances, seeded) → `writer` (.xlsx / .csv, injected `Clock`), plus `cli`; used by tests (test scope) and for demos | domain, POI, Commons CSV |
 | `mcp-server` | The **only** Spring Boot application: `@McpTool` classes, `@McpResource` (`finance://categories`), wiring, `@ConfigurationProperties`, STDIO config | all of the above |
 
 - Base package `com.artyomh.finance.<module>`: `domain`, `application`, `adapter.parser`, `adapter.persistence`,
@@ -48,7 +49,7 @@ prose — it returns numbers and structured data; Claude decides which tools to 
 | `TransactionRepository` | application | `SqliteTransactionRepository` | Postgres repository |
 | `CategoryOverrideRepository` | application | `SqliteCategoryOverrideRepository` | — |
 | `ExchangeRateProvider` | application | `FixedRateProvider` (config) | `CbaRateProvider` + cache |
-| `CategorizationRule` | domain | `OverrideRule`, `MerchantRule`, `KeywordRule`, fallback → `OTHER` / `OTHER_INCOME` by direction | ML-based rule |
+| `CategorizationRule` | domain | `MerchantOverrideRule`, then `KnownMerchantRule` (YAML, then `DefaultCategorizationData`), then `KeywordRule` (YAML, then defaults), fallback → `OTHER` / `OTHER_INCOME` by direction | ML-based rule |
 
 Hexagonal (overall) · Adapter (one parser per bank format) · Factory (parser from file headers) · Strategy
 (exchange-rate source) · Chain of Responsibility (categorization: `Optional<Category> apply(Transaction)`, empty =
@@ -65,6 +66,8 @@ Hexagonal (overall) · Adapter (one parser per bank format) · Factory (parser f
   `FREELANCE`, `OTHER_INCOME`; 13 expense: `RENT`, `UTILITIES`, `INTERNET_MOBILE`, `SUBSCRIPTIONS`, `GROCERIES`,
   `CAFES_RESTAURANTS`, `TRANSPORT`, `HEALTH_FITNESS`, `SHOPPING`, `TRAVEL`, `CASH`, `TRANSFERS`, `OTHER`). Users fix
   mistakes per merchant with `set_category` (stored in `category_overrides`), never by inventing categories.
+- **Known limitation — refunds:** a refund is INCOME from an expense merchant, so it lands in `OTHER_INCOME` and
+  counts as income, not as a reduction of the original category (later: a `REFUNDS` category or netting).
 - **Keyword matching is whole-word**: "ENA" (electricity) must not match "OPENAI".
 - **Idempotent import:** transaction id = hash of date, description, amount, currency and occurrence index — importing
   the same file twice adds nothing. `import_log` records file name/hash and added/duplicate/rejected counts.
@@ -78,6 +81,8 @@ Hexagonal (overall) · Adapter (one parser per bank format) · Factory (parser f
 `search_transactions(query, month, category)` (max 50) · `set_category(merchant, category)`; resource
 `finance://categories`. MVP core three: `spending_by_category`, `find_subscriptions`, `compare_months`.
 
+- `spending_by_category` and `list_months` descriptions say "Refunds count as income (OTHER_INCOME), not as reduced
+  spending." (known limitation above).
 - Small structured results (records), clear descriptions (Claude picks tools by description), read-only by default,
   idempotent import, and **errors that list valid options** ("No data for 2026-03. Available: 2026-05 to 2026-10").
 - **STDIO hygiene:** stdout is the JSON-RPC channel. No banner, no console logging to stdout, no `System.out` — logs
@@ -161,8 +166,15 @@ changed. `PostToolUse` hooks after each edit: `format-warn.sh` (formatting drift
 - Run locally: `./mvnw -pl mcp-server -am package`, then register the jar in Claude Desktop's
   `claude_desktop_config.json` (`"command": "java", "args": ["-jar", "<abs path>.jar"]`), or debug with
   `npx @modelcontextprotocol/inspector java -jar <jar>`.
+- Mock data: `./mvnw -q -pl mockdata -am compile exec:java` writes `data/mock-evoca-2026-05-to-10.{xlsx,csv}` (seed
+  and `Clock` fixed, so regenerating gives no diff). Golden writer files (only after an intended format change):
+  `./mvnw -q -pl mockdata -am compile exec:java -Dexec.mainClass=com.artyomh.finance.mockdata.cli.GenerateGoldenSample`.
+  From a subfolder add `-f <repo>/pom.xml`.
 - No secrets exist in the MVP; the SQLite file path and the fixed rate come from config. Never commit `*.db` or real
-  statements.
+  statements. **Real statements and the database live outside the repo**: `~/.fin-track-mcp/statements/` and
+  `~/.fin-track-mcp/finance.db` (both denied to Claude's `Read`). `data/*` stays git-ignored except the two mock
+  files, and `data/real/` stays ignored and denied as a fallback, but don't put statements there. The mock CLI refuses
+  any target not named `mock-*`, inside `data/real/` or `~/.fin-track-mcp/`, or that is a symlink.
 
 ## Roadmap
 

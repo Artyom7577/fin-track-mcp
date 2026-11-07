@@ -50,9 +50,9 @@ public ImportSummary importStatement(Path file) { … }
 
 // GOOD — one sentence, because the *reason* is not in the signature
 /**
- * Runs before {@code MerchantRule} so a user's {@code set_category} correction always beats the built-in merchant table.
+ * Runs before {@code KnownMerchantRule} so a user's {@code set_category} correction always beats the built-in merchant table.
  */
-public final class OverrideRule implements CategorizationRule { … }
+public final class MerchantOverrideRule implements CategorizationRule { … }
 ```
 
 ## The exception: MCP tool copy

@@ -31,7 +31,7 @@ depends on the server.
 | `adapter-parser` | **By bank / format**: `evoca`, `csv`; parser selection in `selection` (`ParserFactory`); flat `exception` if it needs subtypes |
 | `adapter-persistence` | **By table group**: `transaction`, `category` (overrides), `importlog`; flat `exception`. Migrations in `src/main/resources/db/migration` |
 | `adapter-fx` | **By rate source**: `fixed` (`FixedRateProvider`); later `cba` |
-| `mockdata` | **By role**: `generator` (statement generator, fixed seed), `fixture` (ready-made builders for tests) |
+| `mockdata` | **By use case**: `scenario` (`Scenario` + Builder, sealed `ScenarioEntry`, `Scenarios` Object Mother), `generator` (`StatementGenerator`, `GeneratedStatement`, sealed `StatementLine`), `writer` (`StatementWriter`, XLSX / CSV), `cli` (mains). `writer` → `generator` → `scenario` only; `writer` never sees `scenario`; nothing depends on `cli` (ArchUnit `MockdataArchitectureTest`) |
 | `mcp` (`mcp-server`) | `tool/<area>`, `resource`, `config`, `exception`; `FinanceMcpServerApplication` at the root |
 
 ## The convention
@@ -40,7 +40,7 @@ depends on the server.
     - `domain/transaction`: `Transaction`, `TransactionId`, `Direction`.
     - `domain/money`: `Money`, `Currency`, `ExchangeRate` (→ `money-and-fx`).
     - `domain/category`: `Category` (the fixed 16-value enum).
-    - `domain/categorization`: `CategorizationRule`, `OverrideRule`, `MerchantRule`, `KeywordRule`, the
+    - `domain/categorization`: `CategorizationRule`, `MerchantOverrideRule`, `KnownMerchantRule`, `KeywordRule`, `DefaultCategorizationData`, the
       fallback and the chain (→ `categorization-rules`).
     - A type used by two concepts lives with the one that **owns** its meaning (`Direction` with
       `transaction`, even though `Category` references it).
@@ -112,7 +112,7 @@ depends on the server.
 | Bank format | `adapter/parser/<bank-or-format>` |
 | Table / query | `adapter/persistence/<table-group>` + migration |
 | Rate source | `adapter/fx/<source>` |
-| Mock statement generator / test fixture builder | `mockdata/generator`, `mockdata/fixture` |
+| Mock scenario / generator / file writer / CLI | `mockdata/scenario`, `mockdata/generator`, `mockdata/writer`, `mockdata/cli` |
 | MCP tool | `mcp/tool/<area>` |
 | Resource | `mcp/resource` |
 | Bean / properties / DataSource | `mcp/config` |

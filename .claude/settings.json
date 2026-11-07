@@ -16,7 +16,10 @@
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(./**/*.db)",
-      "Read(./statements/**)"
+      "Read(./statements/**)",
+      "Read(./data/real/**)",
+      "Read(~/.fin-track-mcp/statements/**)",
+      "Read(~/.fin-track-mcp/finance.db*)"
     ]
   },
   "hooks": {

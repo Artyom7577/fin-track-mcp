@@ -1,30 +1,32 @@
 package com.artyomh.finance.application.importing;
 
 import com.artyomh.finance.application.port.CategoryOverrideRepository;
+import com.artyomh.finance.domain.categorization.CategorizationRule;
 import com.artyomh.finance.domain.categorization.Categorizer;
-import com.artyomh.finance.domain.categorization.KeywordRule;
-import com.artyomh.finance.domain.categorization.KnownMerchantRule;
 import com.artyomh.finance.domain.categorization.MerchantOverrideRule;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.SequencedCollection;
 
 /**
- * Builds a fresh chain per import so overrides saved by {@code set_category} since the last import apply.
+ * Builds a fresh chain per import: the user's overrides first, then the configured rules in their given order.
  */
 public final class CategorizerFactory {
 
     private final CategoryOverrideRepository overrides;
-    private final KnownMerchantRule knownMerchants;
-    private final KeywordRule keywords;
+    private final SequencedCollection<CategorizationRule> rules;
 
-    public CategorizerFactory(CategoryOverrideRepository overrides, KnownMerchantRule knownMerchants,
-                              KeywordRule keywords) {
+    public CategorizerFactory(CategoryOverrideRepository overrides, SequencedCollection<CategorizationRule> rules) {
         this.overrides = overrides;
-        this.knownMerchants = knownMerchants;
-        this.keywords = keywords;
+        this.rules = List.copyOf(rules);
     }
 
     public Categorizer create() {
-        return new Categorizer(List.of(new MerchantOverrideRule(overrides.findAll()), knownMerchants, keywords));
+        // reloaded per import so overrides saved by set_category since the last import apply
+        List<CategorizationRule> chain = new ArrayList<>();
+        chain.add(new MerchantOverrideRule(overrides.findAll()));
+        chain.addAll(rules);
+        return new Categorizer(chain);
     }
 }

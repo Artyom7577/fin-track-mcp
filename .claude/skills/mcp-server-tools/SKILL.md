@@ -106,6 +106,9 @@ Tool names are `snake_case`. All month inputs are `String` `"YYYY-MM"`, parsed i
 | `set_category` | `merchant`, `category` | `CategoryChange(merchant, category, rowsUpdated)` | write, idempotent, not destructive |
 | resource `finance://categories` | — | JSON list `{name, displayName, direction}` of the 16 categories | `application/json` |
 
+`spending_by_category` and `list_months` descriptions must say: "Refunds count as income (OTHER_INCOME), not as
+reduced spending." (known limitation, CLAUDE.md Domain rules).
+
 MVP core: `spending_by_category`, `find_subscriptions`, `compare_months`. Result records live in
 `application` (they are use-case outputs) unless the shape is MCP-only; no mirroring records.
 
@@ -150,6 +153,7 @@ public class SpendingTools {
                     Totals for one month grouped by category: income, total spent, savings rate (0..1) and \
                     each expense category's amount in AMD, share of spending and transaction count. \
                     Use it for "where did my money go", "how much did I spend on X". \
+                    Refunds count as income (OTHER_INCOME), not as reduced spending. \
                     Call list_months first if the user did not name a month.""",
             annotations = @McpTool.McpAnnotations(
                     readOnlyHint = true, destructiveHint = false, idempotentHint = true, openWorldHint = false))

@@ -12,4 +12,6 @@ flowchart LR
     fx
     mockdata
     mcp
+    application --> domain
+    mockdata --> domain
 ```
