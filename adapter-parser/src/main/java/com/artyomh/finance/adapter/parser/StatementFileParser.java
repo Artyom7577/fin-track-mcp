@@ -62,7 +62,7 @@ public final class StatementFileParser implements StatementParser {
 
     public StatementFileParser(ParserLimits limits) {
         this.limits = limits;
-        this.xlsxReader = new XlsxFormatReader(limits.maxDataRows(), limits.maxXlsxXmlBytes());
+        this.xlsxReader = new XlsxFormatReader(limits.maxDataRows(), limits.maxXlsxUnpackedBytes());
         this.csvReader = new CsvFormatReader(limits.maxDataRows());
     }
 

@@ -62,7 +62,7 @@ and say what to do; they never contain cell values or library messages.
 ```
 adapter.parser
 ├── StatementFileParser   implements StatementParser — checks in order, picks a reader, hands lines to evoca
-├── ParserLimits          (maxXlsxBytes, maxXlsxXmlBytes, maxCsvBytes, maxDataRows), DEFAULT; built from finance.import.*
+├── ParserLimits          (maxXlsxBytes, maxXlsxUnpackedBytes, maxCsvBytes, maxDataRows), DEFAULT; built from finance.import.*
 ├── format/               bank-agnostic, the only place POI and Commons CSV appear (ArchUnit)
 │   ├── FormatReader      the one internal interface; read(file, isHeader) → Optional<SourceSheet>
 │   ├── XlsxFormatReader, CsvFormatReader, DataLines (row limit while reading)
@@ -89,9 +89,14 @@ Each step reads only what it needs; every failure is a `StatementReadException`.
    size check follows the sniff because the cap depends on the format.
 5. **Extension** must agree, case-insensitive (`.xlsx` with zip bytes, `.csv` with text) → else
    `EXTENSION_MISMATCH`.
-6. **Unpacked sheet size** (.xlsx only, in `XlsxFormatReader` before POI loads anything): the worksheet parts
-   and `sharedStrings.xml` are inflated and counted (stopping one buffer past the limit, so a forged zip
-   directory can't hide the real size); over `maxXlsxXmlBytes` → `FILE_TOO_LARGE`. This catches repetitive
+6. **Unpacked size** (.xlsx only, in `XlsxFormatReader` before POI loads anything): **every** zip entry is
+   inflated and counted — POI parses styles, comments, themes and other parts on open, so any of them can carry
+   the bulk — stopping one buffer past the limit, so a forged zip directory can't hide the real size; over
+   `maxXlsxUnpackedBytes` → `FILE_TOO_LARGE`. The same pass counts **XML start tags** (`<` + a name), because
+   POI's memory follows elements, not bytes: a sheet of minimal one-cell rows fits ~430,000 rows under the byte
+   caps and used to exhaust a 256 MB heap. More than `maxDataRows × 22` elements (realistic: about 11 per row)
+   → `TOO_MANY_ROWS` "… holds more cells than 50,000 statement rows; split the export by period …". No part is
+   found by a fixed path: the sheet itself is located by POI through `workbook.xml` and its relationships. This catches repetitive
    workbooks locally; POI's JVM-wide `ZipSecureFile` settings stay at their defaults.
 7. **Header** found in the first 20 lines → else `HEADER_NOT_FOUND`, listing `EvocaColumns.expected()`.
 
@@ -172,12 +177,15 @@ Measured 2026-11-07 (JDK 25, POI 5.5.1), 50,000 default-scenario rows:
 | | Size | Limit |
 |---|---|---|
 | .xlsx file | 1,348,141 bytes; parsing needs about 250 MB heap (fails at `-Xmx240m`, passes at `-Xmx256m`) | `maxXlsxBytes` 1,500,000 |
-| .xlsx sheet XML unpacked | 11,458,803 (sheet) + 1,657 (shared strings) bytes | `maxXlsxXmlBytes` 23,000,000 (about 2×) |
+| .xlsx unpacked, all 9 parts | 11,464,621 bytes (sheet 11,458,803; everything else under 6 KB) | `maxXlsxUnpackedBytes` 23,000,000 (about 2×) |
 | .csv file | 3,605,694 bytes | `maxCsvBytes` 7,200,000 (about 2×) |
+| .xlsx XML elements, all parts | 550,148 (about 11 per row) | `maxDataRows` × 22 = 1,100,000 |
 | rows | 50,000 | `maxDataRows` 50,000 |
 
 A repetitive 2.6 MB workbook (185,000 identical rows) unpacks to 40.7 MB and needed 512–768 MB heap before
-the unpacked check existed; it is now rejected before POI loads it.
+the unpacked check existed; it is now rejected before POI loads it. The densest workbook every cap still admits
+(270,000 hand-written one-cell rows: 1.36 MB file, 19.2 MB unpacked, 1,080,146 elements) needs 256–320 MB heap,
+about the same as a realistic 50,000-row file, and then fails with `TOO_MANY_ROWS`.
 `StatementFileParserTest.fiftyThousandRowFilesFitUnderEveryLimit` keeps the caps aligned with the row limit.
 SAX streaming is out of scope unless the limits must grow a lot.
 

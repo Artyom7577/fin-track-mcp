@@ -223,7 +223,7 @@ The model supplies the path, so treat it as untrusted:
    checked **before** any size check or byte read, so the tool can't probe other files' existence or size.
 5. Extension `.xlsx` / `.csv` as a pre-filter — the parser still checks first bytes, extension and headers.
 6. Optionally pre-check `Files.size` with the **same** `ParserLimits` values (`finance.import.max-xlsx-bytes`,
-   `max-xlsx-xml-bytes`, `max-csv-bytes`, `max-data-rows`). The parser's limits are the only size limits: no
+   `max-xlsx-unpacked-bytes`, `max-csv-bytes`, `max-data-rows`). The parser's limits are the only size limits: no
    separate tool cap. Then call the service; `StatementReadException.code()` maps to the tool error, and
    `ImportSummary.warnings` (data skipped as a whole) are shown apart from `rejected` (broken rows).
 

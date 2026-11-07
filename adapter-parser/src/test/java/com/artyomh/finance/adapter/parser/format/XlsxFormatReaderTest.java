@@ -17,7 +17,10 @@ import java.time.Month;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -141,8 +144,55 @@ class XlsxFormatReaderTest {
         assertThatExceptionOfType(StatementReadException.class)
                 .isThrownBy(() -> new XlsxFormatReader(100_000, 50_000).read(file, HEADER))
                 .satisfies(e -> assertThat(e.failure()).isEqualTo(ReadFailure.FILE_TOO_LARGE))
-                .withMessage("The sheets in repetitive.xlsx unpack to more than 0.0 MB, the limit. "
+                .withMessage("The contents of repetitive.xlsx unpack to more than 0.0 MB, the limit. "
                         + "Split the export by period.");
+    }
+
+    @Test
+    void rejectsMoreXmlElementsThanTheRowLimitCanHoldBeforePoiLoadsThem() {
+        List<List<Object>> rows = new ArrayList<>();
+        rows.add(row("Date"));
+        for (int i = 0; i < 300; i++) {
+            rows.add(row(new XlsxFixture.Plain(1)));
+        }
+        Path file = new XlsxFixture().sheet("S", rows).writeTo(dir.resolve("dense.xlsx"));
+
+        assertThatExceptionOfType(StatementReadException.class)
+                .isThrownBy(() -> new XlsxFormatReader(10, 10_000_000).read(file, HEADER))
+                .satisfies(e -> assertThat(e.failure()).isEqualTo(ReadFailure.TOO_MANY_ROWS))
+                .withMessage("dense.xlsx holds more cells than 10 statement rows; split the export by period and "
+                        + "import each part.");
+    }
+
+    @Test
+    void bulkHiddenInAPartOtherThanTheSheetCountsTowardTheLimit() throws IOException {
+        Map<String, String> parts = parts(new XlsxFixture().sheet("S", List.of(row("Date"), row(MAY_FIRST)))
+                .writeTo(dir.resolve("small.xlsx")));
+        String styles = parts.get("xl/styles.xml");
+        int afterDeclaration = styles.indexOf("?>") + 2;
+        // compresses well under POI's own 100x ratio guard, so only the unpacked count can catch it
+        parts.put("xl/styles.xml", styles.substring(0, afterDeclaration) + "<!--" + padding(2_000_000) + "-->"
+                + styles.substring(afterDeclaration));
+        Path file = zip(dir.resolve("padded-styles.xlsx"), parts);
+
+        assertThat(new XlsxFormatReader(100, 10_000_000).read(file, HEADER)).isPresent();
+        assertThatExceptionOfType(StatementReadException.class)
+                .isThrownBy(() -> new XlsxFormatReader(100, 1_000_000).read(file, HEADER))
+                .satisfies(e -> assertThat(e.failure()).isEqualTo(ReadFailure.FILE_TOO_LARGE));
+    }
+
+    @Test
+    void theSheetIsFoundThroughTheWorkbookRelationshipsNotAFixedPath() throws IOException {
+        Map<String, String> parts = parts(new XlsxFixture().sheet("S", List.of(row("Date"), row(MAY_FIRST)))
+                .writeTo(dir.resolve("standard.xlsx")));
+        Map<String, String> moved = new LinkedHashMap<>();
+        parts.forEach((name, text) -> moved.put(name.replace("xl/worksheets/sheet1.xml", "xl/statement/data.xml"),
+                text.replace("worksheets/sheet1.xml", "statement/data.xml")));
+        Path file = zip(dir.resolve("moved.xlsx"), moved);
+
+        assertThat(moved).containsKey("xl/statement/data.xml").doesNotContainKey("xl/worksheets/sheet1.xml");
+        assertThat(reader.read(file, HEADER).orElseThrow().lines()).singleElement()
+                .extracting(line -> line.cell(0)).isEqualTo(new Cell.DateCell(MAY_FIRST));
     }
 
     @Test
@@ -170,16 +220,36 @@ class XlsxFormatReaderTest {
     }
 
     private Path withSharedStrings(Path source, String sharedStrings) throws IOException {
-        Path target = dir.resolve("xxe.xlsx");
-        try (ZipFile zip = new ZipFile(source.toFile());
-             ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(target))) {
+        Map<String, String> parts = parts(source);
+        parts.put("xl/sharedStrings.xml", sharedStrings);
+        return zip(dir.resolve("xxe.xlsx"), parts);
+    }
+
+    private static String padding(int length) {
+        Random random = new Random(1);
+        StringBuilder text = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            text.append((char) ('a' + random.nextInt(4)));
+        }
+        return text.toString();
+    }
+
+    // a workbook's parts as text, in zip order, so a test can rewrite one and zip them again
+    private static Map<String, String> parts(Path workbook) throws IOException {
+        Map<String, String> parts = new LinkedHashMap<>();
+        try (ZipFile zip = new ZipFile(workbook.toFile())) {
             for (ZipEntry entry : Collections.list(zip.entries())) {
-                out.putNextEntry(new ZipEntry(entry.getName()));
-                if (entry.getName().equals("xl/sharedStrings.xml")) {
-                    out.write(sharedStrings.getBytes(StandardCharsets.UTF_8));
-                } else {
-                    zip.getInputStream(entry).transferTo(out);
-                }
+                parts.put(entry.getName(), new String(zip.getInputStream(entry).readAllBytes(), StandardCharsets.UTF_8));
+            }
+        }
+        return parts;
+    }
+
+    private static Path zip(Path target, Map<String, String> parts) throws IOException {
+        try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(target))) {
+            for (Map.Entry<String, String> part : parts.entrySet()) {
+                out.putNextEntry(new ZipEntry(part.getKey()));
+                out.write(part.getValue().getBytes(StandardCharsets.UTF_8));
             }
         }
         return target;

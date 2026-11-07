@@ -31,21 +31,24 @@ import java.util.zip.ZipFile;
  */
 public final class XlsxFormatReader implements FormatReader {
 
-    private static final String WORKSHEETS_FOLDER = "xl/worksheets/";
-    private static final String SHARED_STRINGS = "xl/sharedStrings.xml";
-    private static final String XML_SUFFIX = ".xml";
     private static final int BUFFER_BYTES = 64 * 1024;
     private static final BigDecimal BYTES_PER_MEGABYTE = BigDecimal.valueOf(1_000_000);
+    // POI's memory follows the number of XML elements, not bytes: 50,000 realistic rows hold 550,148 elements
+    // (about 11 per row), so this allows about twice that before POI builds anything
+    private static final int MAX_ELEMENTS_PER_DATA_ROW = 22;
 
     private final int maxDataRows;
-    private final long maxXmlBytes;
+    private final long maxUnpackedBytes;
+    private final long maxElements;
 
     /**
-     * A reader that rejects workbooks whose sheet XML unpacks to more than {@code maxXmlBytes} before POI loads them.
+     * A reader that rejects workbooks whose parts unpack to more than {@code maxUnpackedBytes}, or hold more XML
+     * elements than {@code maxDataRows} realistic rows, before POI loads them.
      */
-    public XlsxFormatReader(int maxDataRows, long maxXmlBytes) {
+    public XlsxFormatReader(int maxDataRows, long maxUnpackedBytes) {
         this.maxDataRows = maxDataRows;
-        this.maxXmlBytes = maxXmlBytes;
+        this.maxUnpackedBytes = maxUnpackedBytes;
+        this.maxElements = (long) maxDataRows * MAX_ELEMENTS_PER_DATA_ROW;
     }
 
     @Override
@@ -169,19 +172,24 @@ public final class XlsxFormatReader implements FormatReader {
         return rows;
     }
 
-    // a repetitive workbook packs far more rows into the byte cap; counting inflated bytes also defeats a forged
-    // zip directory, and it keeps POI's JVM-wide ZipSecureFile settings at their defaults
+    // every part counts, since POI parses styles, comments and others on open and any can carry the bulk; counting
+    // inflated bytes defeats a forged zip directory and keeps POI's JVM-wide ZipSecureFile settings at their defaults
     private void checkUnpackedSize(Path file) {
-        long unpacked = 0;
+        UnpackedTally tally = new UnpackedTally();
         try (ZipFile zip = new ZipFile(file.toFile())) {
-            for (ZipEntry entry : zip.stream().filter(XlsxFormatReader::isSheetData).toList()) {
+            for (ZipEntry entry : zip.stream().toList()) {
                 try (InputStream in = zip.getInputStream(entry)) {
-                    unpacked += countBytes(in, maxXmlBytes - unpacked);
+                    tally.add(in, maxUnpackedBytes, maxElements);
                 }
-                if (unpacked > maxXmlBytes) {
-                    throw new StatementReadException(ReadFailure.FILE_TOO_LARGE, "The sheets in "
-                            + file.getFileName() + " unpack to more than " + megabytes(maxXmlBytes)
+                if (tally.bytes > maxUnpackedBytes) {
+                    throw new StatementReadException(ReadFailure.FILE_TOO_LARGE, "The contents of "
+                            + file.getFileName() + " unpack to more than " + megabytes(maxUnpackedBytes)
                             + " MB, the limit. Split the export by period.");
+                }
+                if (tally.elements > maxElements) {
+                    throw new StatementReadException(ReadFailure.TOO_MANY_ROWS, String.format(Locale.ROOT,
+                            "%s holds more cells than %,d statement rows; split the export by period and import "
+                                    + "each part.", file.getFileName(), maxDataRows));
                 }
             }
         } catch (StatementReadException e) {
@@ -191,21 +199,31 @@ public final class XlsxFormatReader implements FormatReader {
         }
     }
 
-    private static boolean isSheetData(ZipEntry entry) {
-        String name = entry.getName();
-        return name.equals(SHARED_STRINGS) || (name.startsWith(WORKSHEETS_FOLDER) && name.endsWith(XML_SUFFIX));
-    }
+    /**
+     * Inflated bytes and XML start tags across a workbook's parts, read at most one buffer past either budget.
+     */
+    private static final class UnpackedTally {
 
-    // reads at most one byte past the budget, so a huge entry is never inflated in full
-    private static long countBytes(InputStream in, long budget) throws IOException {
-        byte[] buffer = new byte[BUFFER_BYTES];
-        long count = 0;
-        int read = in.read(buffer);
-        while (read >= 0 && count <= budget) {
-            count += read;
-            read = in.read(buffer);
+        private long bytes;
+        private long elements;
+
+        void add(InputStream in, long maxBytes, long maxElements) throws IOException {
+            byte[] buffer = new byte[BUFFER_BYTES];
+            boolean afterOpenBracket = false;
+            int read = in.read(buffer);
+            while (read >= 0 && bytes <= maxBytes && elements <= maxElements) {
+                for (int i = 0; i < read; i++) {
+                    // "<" then a name starts an element; "</", "<?" and "<!" do not
+                    byte current = buffer[i];
+                    if (afterOpenBracket && current != '/' && current != '?' && current != '!') {
+                        elements++;
+                    }
+                    afterOpenBracket = current == '<';
+                }
+                bytes += read;
+                read = in.read(buffer);
+            }
         }
-        return count;
     }
 
     private static String megabytes(long bytes) {

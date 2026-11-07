@@ -24,7 +24,7 @@ rounding, or an aggregation that silently mixes AMD and USD, is a correctness bu
 # Scope — what you review
 
 1. **Statement parsing (`adapter-parser`)** — `XSSFWorkbook` loads the whole DOM (measured: a 1.35 MB,
-   50,000-row .xlsx needs about 250 MB heap), so `ParserLimits.maxXlsxBytes` and the unpacked-XML cap `maxXlsxXmlBytes` are the memory guard; SAX
+   50,000-row .xlsx needs about 250 MB heap), so `ParserLimits.maxXlsxBytes` and the unpacked-parts cap `maxXlsxUnpackedBytes` are the memory guard; SAX
    (`XSSFReader`) only if the limits must grow a lot. Opening the workbook twice (once to find the header,
    once to parse), reading the file into a `byte[]`, `DataFormatter` or `SimpleDateFormat`/
    `DateTimeFormatter` created per cell, regex compiled per row. CSV: `CSVParser` iterated lazily, not
