@@ -12,16 +12,17 @@ Design deck (source of the decisions below): https://claude.ai/artifact/AJJgpoyA
 testable without Spring or MCP; the MCP layer only translates tool calls into service calls. The server never writes
 prose — it returns numbers and structured data; Claude decides which tools to call and writes the explanation.
 
-> **Current state:** the 7 modules exist with configured POMs but no code yet — only `FinanceMcpApplication`
-> (an MCP server over STDIO with zero tools) and its context test. Phase 1 fills them in.
+> **Current state:** `domain` (model, categorization, merchant cleaning) and `application` (import, spending,
+> comparison, subscriptions, ports) are built and unit-tested. Adapters, mock data and MCP tools are next;
+> `FinanceMcpApplication` is still an MCP server over STDIO with zero tools.
 
 ## Module boundaries (strict, hexagonal — dependencies point inward)
 
 | Module | Owns | Depends on |
 |---|---|---|
 | root `pom.xml` (parent) | Java 25, Spring Boot 4 + Spring AI 2.0 BOMs, plugin versions, the module list | — |
-| `domain` | `Transaction`, `Money`, `Currency`, `Direction`, `Category`, categorization rules (`CategorizationRule` chain), subscription/unusual-spend detection. **Pure Java — no Spring, no POI, no JDBC** | nothing |
-| `application` | Use-case services (`ImportService`, `SpendingService`, `SubscriptionService`, `ComparisonService`, …), **port interfaces** (`StatementParser`, `TransactionRepository`, `ExchangeRateProvider`), result records (`ImportSummary`, `RowResult`). **No Spring, no framework imports** | domain |
+| `domain` | `Transaction`, `Money`, `Currency`, `Direction`, `Category`, categorization rules (`CategorizationRule` chain), merchant cleaning and card masking. **Pure Java — no Spring, no POI, no JDBC** | nothing |
+| `application` | Use-case services (`ImportService`, `SpendingService`, `SubscriptionService`, `ComparisonService`, …), **port interfaces** (`StatementParser`, `TransactionRepository`, `CategoryOverrideRepository`, `ExchangeRateProvider`), result records (`ImportSummary`, `RowOutcome`, `MonthlySpending`, …), `Percent`. **No Spring, no framework imports** | domain |
 | `adapter-parser` | `EvocaXlsxParser` (Apache POI), `GenericCsvParser` (Commons CSV), `ParserFactory` (picks the parser from file headers) | application |
 | `adapter-persistence` | `SqliteTransactionRepository` etc. (`JdbcClient`), Flyway migrations (`src/main/resources/db/migration`) | application |
 | `adapter-fx` | `FixedRateProvider` (rate from config); later `CbaRateProvider` + cache | application |
@@ -45,6 +46,7 @@ prose — it returns numbers and structured data; Claude decides which tools to 
 |---|---|---|---|
 | `StatementParser` | application | `EvocaXlsxParser`, `GenericCsvParser` | `AmeriaParser`, `PdfParser` |
 | `TransactionRepository` | application | `SqliteTransactionRepository` | Postgres repository |
+| `CategoryOverrideRepository` | application | `SqliteCategoryOverrideRepository` | — |
 | `ExchangeRateProvider` | application | `FixedRateProvider` (config) | `CbaRateProvider` + cache |
 | `CategorizationRule` | domain | `OverrideRule`, `MerchantRule`, `KeywordRule`, fallback → `OTHER` / `OTHER_INCOME` by direction | ML-based rule |
 
@@ -66,7 +68,7 @@ Hexagonal (overall) · Adapter (one parser per bank format) · Factory (parser f
 - **Keyword matching is whole-word**: "ENA" (electricity) must not match "OPENAI".
 - **Idempotent import:** transaction id = hash of date, description, amount, currency and occurrence index — importing
   the same file twice adds nothing. `import_log` records file name/hash and added/duplicate/rejected counts.
-- **Every row ends in exactly one outcome:** `sealed interface RowResult permits Imported, Duplicate, Rejected`;
+- **Every row ends in exactly one outcome:** `sealed interface RowOutcome permits Imported, Duplicate, Rejected`;
   `ImportService` folds them into an `ImportSummary` (added, duplicates, rejected with reasons).
 
 ## MCP tools (the product surface — see `mcp-server-tools`)
@@ -96,7 +98,7 @@ Hexagonal (overall) · Adapter (one parser per bank format) · Factory (parser f
     before editing Spring AI code — Spring AI 2.0 differs from 1.x tutorials
   - any SQL / `JdbcClient` / repository → `sqlite-jdbcclient`; any schema change → `flyway-migrations`
   - money, currency, rounding, exchange rates → `money-and-fx`
-  - parsers, `ParserFactory`, import, dedupe, `RowResult` → `statement-import`
+  - parsers, `ParserFactory`, import, dedupe, `RowOutcome` → `statement-import`
   - categorization rules, keywords, overrides → `categorization-rules`
   - any comment or JavaDoc → `comment-style`; tests → `spring-boot-testing`
 - **Principal-engineer bar.** `effective-java` before any method/class; `java-25-idioms`; `oop-architecture` for
@@ -122,9 +124,14 @@ unknown category or merchant, duplicate import, SQLite locked, unsupported curre
 exception. Never let a raw framework exception (POI, CSV, `DataAccessException`, `SQLException`) leak across a module
 boundary.
 
-- **Each module owns its exceptions** in a flat `exception` package; a sealed base in `domain`
-  (`FinanceException`) with subtypes where callers must distinguish. Adapters catch library failures and rethrow a
-  port-level exception. A bad *row* is not an exception — it is a `Rejected` `RowResult` with a reason.
+- **Each module owns its exceptions** in a flat `exception` package, all extending the **abstract, non-sealed**
+  `FinanceException` in `domain/exception` (sealed is impossible: without JPMS, sealed subtypes must share one
+  package). Each subtype returns a stable `code()` (`MONTH_NOT_FOUND`, `INVALID_INPUT`) and a message listing valid
+  options. Adapters catch library failures and rethrow a port-level exception. A bad *row* is not an exception — it
+  is a `Rejected` `RowOutcome` with a reason.
+- **Rounding:** `HALF_EVEN` everywhere; AMD has 2 minor digits (ISO 4217); every percentage goes through
+  `Percent.of(part, whole)` (1 decimal). Values derivable from components (`netAmd()`, `deltaAmd()`, `changePct()`)
+  are methods, never stored fields, and "undefined" is `Optional`, never `null`, in the application layer.
 - **The MCP layer maps exceptions to tool errors** with an actionable message listing valid options; never a stack
   trace, never a raw library message, never file contents.
 

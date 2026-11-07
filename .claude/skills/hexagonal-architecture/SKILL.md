@@ -65,7 +65,8 @@ Port rules:
 
 | You are adding… | Module / package | Notes |
 |---|---|---|
-| A value type, enum, business rule, calculation (savings rate, subscription detection) | `domain` | pure, unit-tested in ms |
+| A value type, enum, business rule, per-transaction calculation | `domain` | pure, unit-tested in ms |
+| A read-side analysis over many transactions (spending, comparison, subscription detection) | `application/analysis/<usecase>` | needs ports and `Percent`; still framework-free |
 | A use case ("compare two months") | `application` service | plain constructor, ports injected |
 | A port (new outside capability) | `application` (or domain for rule-like strategies) | run `abstraction-design` |
 | Use-case result record (`ImportSummary`, `CategorySpending`) | `application` | MCP returns it as-is when it fits |

@@ -15,9 +15,6 @@ public final class MerchantNameCleaner {
             Pattern.compile("\\s+(PAYMENT|TOP-UP)$")
     );
 
-    private static final Pattern FULL_CARD_NUMBER = Pattern.compile(
-            "(?<!\\d)(?:\\d[ -]?){8,15}(\\d{4})(?!\\d)", Pattern.UNICODE_CHARACTER_CLASS);
-    private static final String MASKED_CARD_NUMBER = "****$1";
     private static final Pattern SPACES = Pattern.compile("\\s+");
 
     private MerchantNameCleaner() {
@@ -25,8 +22,7 @@ public final class MerchantNameCleaner {
 
     public static String clean(String description) {
         Objects.requireNonNull(description, "description");
-        String original = FULL_CARD_NUMBER.matcher(collapseSpaces(description).toUpperCase(Locale.ROOT))
-                .replaceAll(MASKED_CARD_NUMBER);
+        String original = CardNumberMasker.mask(collapseSpaces(description).toUpperCase(Locale.ROOT));
         String name = original;
         for (Pattern noise : NOISE) {
             name = collapseSpaces(noise.matcher(name).replaceAll(" "));

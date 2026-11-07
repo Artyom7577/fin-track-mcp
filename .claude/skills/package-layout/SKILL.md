@@ -1,6 +1,6 @@
 ---
 name: package-layout
-description: Invoke when placing or organizing Java classes into packages in fin-track-mcp — deciding which module and package a new class goes in (domain, application, adapter-parser, adapter-persistence, adapter-fx, mockdata, mcp-server under com.artyomh.finance.<module>), adding a value type, rule, use-case service, port, result record, parser, repository, rate provider, MCP tool / resource / config class, exception, or test, or moving / reorganizing packages. Enforces concept sub-packages in domain (transaction, money, category, categorization, …), service/<usecase> + flat port in application, by-bank/format and by-table sub-packages in adapters, tool/<area> + resource + config + exception in mcp, flat exception packages everywhere, and tests mirroring the class-under-test's package. Use together with hexagonal-architecture (which module) — this skill decides which package. Triggers: "which package", "where does this go", "new class", "move class", "reorganize packages", "result record", "port", "tool class", a class sitting directly in a module's base package, a package-layout-warn.sh warning.
+description: Invoke when placing or organizing Java classes into packages in fin-track-mcp — deciding which module and package a new class goes in (domain, application, adapter-parser, adapter-persistence, adapter-fx, mockdata, mcp-server under com.artyomh.finance.<module>), adding a value type, rule, use-case service, port, result record, parser, repository, rate provider, MCP tool / resource / config class, exception, or test, or moving / reorganizing packages. Enforces concept sub-packages in domain (transaction, money, category, categorization, …), importing / analysis/<usecase> + flat port in application, by-bank/format and by-table sub-packages in adapters, tool/<area> + resource + config + exception in mcp, flat exception packages everywhere, and tests mirroring the class-under-test's package. Use together with hexagonal-architecture (which module) — this skill decides which package. Triggers: "which package", "where does this go", "new class", "move class", "reorganize packages", "result record", "port", "tool class", a class sitting directly in a module's base package, a package-layout-warn.sh warning.
 ---
 
 # Package layout (fin-track-mcp)
@@ -26,7 +26,7 @@ depends on the server.
 
 | Module | Layout |
 |---|---|
-| `domain` | **By concept**: `transaction`, `money`, `category`, `categorization`, `subscription` / `anomaly` (detection rules); flat `exception` |
+| `domain` | **By concept**: `transaction`, `money`, `category`, `categorization`, `merchant`; flat `exception` (detection over many transactions lives in `application/analysis`) |
 | `application` | **`service/<usecase>`** (service + its result records), flat **`port`** (outbound interfaces + types only they use), flat `exception` |
 | `adapter-parser` | **By bank / format**: `evoca`, `csv`; parser selection in `selection` (`ParserFactory`); flat `exception` if it needs subtypes |
 | `adapter-persistence` | **By table group**: `transaction`, `category` (overrides), `importlog`; flat `exception`. Migrations in `src/main/resources/db/migration` |
@@ -42,17 +42,20 @@ depends on the server.
     - `domain/category`: `Category` (the fixed 16-value enum).
     - `domain/categorization`: `CategorizationRule`, `OverrideRule`, `MerchantRule`, `KeywordRule`, the
       fallback and the chain (→ `categorization-rules`).
-    - `domain/subscription`, `domain/anomaly`: detection rules and their value types.
     - A type used by two concepts lives with the one that **owns** its meaning (`Direction` with
       `transaction`, even though `Category` references it).
 
-2. **Application: `service/<usecase>` + flat `port`.**
-    - `service/importing/ImportService` with its results `ImportSummary` and the sealed
-      `RowResult` (`Imported`, `Duplicate`, `Rejected`) — a sealed family stays in **one** package.
-    - `service/spending/SpendingService` + `CategorySpending`, `MerchantTotal`;
-      `service/comparison/ComparisonService` + `MonthComparison`; `service/subscription/…`.
-    - **Result records live next to the service that returns them.** One shared by two use cases
-      (`MonthRange`) moves to the `service` root as `public`, not into a new `common`/`dto` package.
+2. **Application: top-level use-case packages + flat `port`.**
+    - `importing/ImportService` with its results `ImportSummary` and the sealed
+      `RowOutcome` (`Imported`, `Duplicate`, `Rejected`) — a sealed family stays in **one** package.
+    - Read-side analysis lives under `analysis/<usecase>`: `analysis/spending/SpendingService` +
+      `MonthlySpending`, `CategorySpending`, `MerchantSpending`, `MonthSummary`;
+      `analysis/comparison/ComparisonService` + `MonthComparison`, `CategoryChange`;
+      `analysis/subscription/SubscriptionService` + `MonthlyRecurrenceDetector`, `Subscription`, … .
+    - `comparison` may depend on `spending`; `spending` and `subscription` never depend on `comparison`
+      (ArchUnit `AnalysisArchitectureTest` in `application` tests).
+    - **Result records live next to the service that returns them.** Something shared by several
+      analysis use cases (`Percent`) sits at the `analysis` root as `public`, not in a `common`/`dto` package.
     - `port`: `StatementParser`, `TransactionRepository`, `ExchangeRateProvider`, override / import-log
       ports — and the types that exist only to cross a port (`ParsedStatement`, `StatementHeader`).
       Ports are pre-approved abstractions (CLAUDE.md); a new one still goes through `abstraction-design`.
@@ -81,20 +84,20 @@ depends on the server.
       `DataSource`, STDIO/logging config.
     - `mcp/exception`: exception → tool-error mapping (`ToolErrors`, `ToolFailure`) (→ `mcp-server-tools`).
 
-5. **Exception packages stay FLAT** in every module — never concept-grouped. A `sealed` hierarchy's
-   permitted subtypes must be in the **same package** (no JPMS), so `domain/exception` holds
-   `FinanceException` and its kinds; other modules subclass a kind in their own flat `exception`
-   package (`application/exception/NoDataForMonthException`) — see `hexagonal-architecture`.
+5. **Exception packages stay FLAT** in every module — never concept-grouped. `domain/exception` holds
+   the abstract, **non-sealed** `FinanceException` (sealed subtypes would all have to share its package,
+   no JPMS); other modules subclass it in their own flat `exception` package
+   (`application/exception/MonthNotFoundException`) — see `hexagonal-architecture`.
 
 6. **No grab-bag packages.** No `util`, `common`, `helper`, `dto`, `model` packages at a module root. A
    helper used by one package is package-private there; a ≲15-line helper stays a private method
    (CLAUDE.md). Named constants live in the class that owns their meaning.
 
 7. **Tests mirror the class-under-test's package** in the same module
-   (`application/src/test/java/com/artyomh/finance/application/service/spending/SpendingServiceTest`).
+   (`application/src/test/java/com/artyomh/finance/application/analysis/spending/SpendingServiceTest`).
    Hand-written port fakes used by several application tests go in a test-source `…/application/fake`
    package; cross-module fixtures come from `mockdata`, never a test-jar of another module.
-   ArchUnit tests sit in `mcp-server` tests (`com.artyomh.finance.mcp.ArchitectureTest`) where every
+   Cross-module ArchUnit tests sit in `mcp-server` tests (`com.artyomh.finance.mcp.ArchitectureTest`) where every
    module is on the classpath (→ `spring-boot-testing`).
 
 ## Decision shortcuts
@@ -103,8 +106,8 @@ depends on the server.
 |---|---|
 | Value type / enum / business rule | `domain/<concept>` |
 | Exception kind | `domain/exception`; module-specific subtype → `<module>/exception` |
-| Use case | `application/service/<usecase>/<Name>Service` |
-| What a use case returns | same `service/<usecase>` package |
+| Use case | `application/importing` or `application/analysis/<usecase>/<Name>Service` |
+| What a use case returns | same use-case package |
 | Outbound capability | `application/port` |
 | Bank format | `adapter/parser/<bank-or-format>` |
 | Table / query | `adapter/persistence/<table-group>` + migration |
