@@ -4,7 +4,7 @@ description: >-
   Use when writing or reviewing Java 25 code in the fin-track-mcp repo (Spring Boot 4, Spring AI
   MCP server, hexagonal Maven modules) and picking modern language idioms: records for value
   objects (Money, Transaction), results and MCP tool outputs, compact canonical constructors for
-  validation and normalization, sealed interfaces + records as algebraic result types (RowResult =
+  validation and normalization, sealed interfaces + records as algebraic result types (RowOutcome =
   Imported | Duplicate | Rejected, the FinanceException hierarchy), exhaustive pattern-matching
   switch with record deconstruction and guarded (when) patterns and deliberately NO default branch,
   instanceof pattern matching, text blocks, sequenced collections (getFirst/getLast/reversed),
@@ -30,7 +30,7 @@ Where idioms live by module (base package `com.artyomh.finance.*`):
 enums (`Category`, `Direction`, `Currency`), the `CategorizationRule` chain, detection policies and
 the sealed `FinanceException` base — pure Java, no Spring; **`application`**
 (`…finance.application`) holds use-case services, port interfaces and result records
-(`ImportSummary`, sealed `RowResult`) and the exhaustive switches over them; **adapters**
+(`ImportSummary`, sealed `RowOutcome`) and the exhaustive switches over them; **adapters**
 (`…finance.adapter.parser|persistence|fx`) map library types into those records;
 **`mcp-server`** (`…finance.mcp`) holds `@McpTool` classes, their small result records and
 the `@ConfigurationProperties` records. Package placement: `package-layout`.
@@ -60,7 +60,7 @@ language.
 |---|---|---|
 | Record | value object, result, tool output | `record Money(BigDecimal amount, Currency currency) {}` |
 | Compact constructor | validate / normalize on construction | `public Money { if (amount.signum() < 0) { … } }` |
-| Sealed interface + records | closed set of outcomes (ADT) | `sealed interface RowResult permits Imported, Duplicate, Rejected {}` |
+| Sealed interface + records | closed set of outcomes (ADT) | `sealed interface RowOutcome permits Imported, Duplicate, Rejected {}` |
 | Pattern `switch`, no `default` | exhaustively handle a sealed type | `switch (r) { case Rejected(int row, String why) -> …; }` |
 | Guarded pattern | matched shape **plus** a condition | `case Rejected(int row, String why) when row == HEADER_ROW -> …` |
 | `instanceof` pattern | conditional downcast without a cast | `if (e instanceof SQLException sql && …)` |
@@ -124,16 +124,13 @@ When an operation has a **fixed, known set of outcomes**, model the whole result
 hierarchy. Callers cannot invent a new case, and the compiler proves they handled every one (§3).
 
 ```java
-package com.artyomh.finance.application.imports;
+package com.artyomh.finance.application.importing;
 
-import com.artyomh.finance.domain.Transaction;
+public sealed interface RowOutcome {
 
-public sealed interface RowResult
-        permits RowResult.Imported, RowResult.Duplicate, RowResult.Rejected {
-
-    record Imported(Transaction transaction) implements RowResult {}
-    record Duplicate(String transactionId)    implements RowResult {}
-    record Rejected(int rowNumber, String reason) implements RowResult {}
+    record Imported(Transaction transaction) implements RowOutcome {}
+    record Duplicate(TransactionId id)       implements RowOutcome {}
+    record Rejected(RowProblem problem)      implements RowOutcome {}
 }
 ```
 
@@ -141,15 +138,15 @@ A parser or service returns the type instead of throwing for *expected* outcomes
 or a re-imported row is normal, not exceptional:
 
 ```java
-RowResult classify(ParsedRow row) {
+RowOutcome classify(ParsedRow row) {
     if (row.amount().isEmpty()) {
-        return new RowResult.Rejected(row.number(), MISSING_AMOUNT);
+        return new RowOutcome.Rejected(new RowProblem(row.lineNumber(), MISSING_AMOUNT));
     }
     Transaction transaction = toTransaction(row);
     if (transactions.existsById(transaction.id())) {
-        return new RowResult.Duplicate(transaction.id());
+        return new RowOutcome.Duplicate(transaction.id());
     }
-    return new RowResult.Imported(transaction);
+    return new RowOutcome.Imported(transaction);
 }
 ```
 
@@ -163,11 +160,11 @@ Deconstruct records directly in `case` labels, add `when` guards for conditions,
 write a `default` branch** over a sealed type.
 
 ```java
-ImportSummary add(ImportSummary summary, RowResult result) {
+ImportSummary add(ImportSummary summary, RowOutcome result) {
     return switch (result) {
         case Imported _                       -> summary.withAdded();
         case Duplicate _                      -> summary.withDuplicate();
-        case Rejected(int row, String reason) -> summary.withRejected(row, reason);
+        case Rejected(RowProblem problem)     -> summary.withRejected(problem);
     };
 }
 ```

@@ -219,9 +219,13 @@ The model supplies the path, so treat it as untrusted:
    e.g. /Users/me/Downloads/statement.xlsx").
 2. `toRealPath()` (resolves symlinks / `..`); `NoSuchFileException` → "File not found: <path>".
 3. `Files.isRegularFile` and `Files.isReadable`.
-4. Extension in `finance.import.allowed-extensions` (`xlsx`, `csv`) — the parser still checks headers.
-5. `Files.size` ≤ `finance.import.max-file-bytes` (e.g. 10 MB) — zip-bomb / huge-CSV guard.
-6. If `finance.import.allowed-roots` is set, the real path must `startsWith` one of them.
+4. The real path must `startsWith` one of `finance.import.allowed-roots` (default `~/.fin-track-mcp/statements/`),
+   checked **before** any size check or byte read, so the tool can't probe other files' existence or size.
+5. Extension `.xlsx` / `.csv` as a pre-filter — the parser still checks first bytes, extension and headers.
+6. Optionally pre-check `Files.size` with the **same** `ParserLimits` values (`finance.import.max-xlsx-bytes`,
+   `max-xlsx-unpacked-bytes`, `max-csv-bytes`, `max-data-rows`). The parser's limits are the only size limits: no
+   separate tool cap. Then call the service; `StatementReadException.code()` maps to the tool error, and
+   `ImportSummary.warnings` (data skipped as a whole) are shown apart from `rejected` (broken rows).
 
 All limits come from an `@ConfigurationProperties` record (`ImportProperties`), not literals. Never return
 file contents in an error.

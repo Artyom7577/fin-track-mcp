@@ -48,13 +48,13 @@ abstraction is gated by the `abstraction-design` skill.)
   Spring imports; `mcp-server` declares them as beans.
   ```java
   public final class ImportService {
-      private final ParserFactory parsers;
+      private final StatementParser parser;
       private final TransactionRepository transactions;
       private final Categorizer categorizer;
 
-      public ImportService(ParserFactory parsers, TransactionRepository transactions,
+      public ImportService(StatementParser parser, TransactionRepository transactions,
                            Categorizer categorizer) {
-          this.parsers = parsers;
+          this.parser = parser;
           this.transactions = transactions;
           this.categorizer = categorizer;
       }

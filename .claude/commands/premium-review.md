@@ -68,7 +68,7 @@ dimensions went unexamined?"* Common blind spots for this project:
 - **PII:** descriptions, merchants, amounts or card/account numbers in logs (above DEBUG) or tool errors; stdout
   writes.
 - **Parser edge cases:** empty file, header-only, malformed/blank rows, unknown currency, sign conventions, date
-  formats, merged cells, a second bank's headers mis-detected by `ParserFactory`.
+  formats, merged cells, a second bank's headers mis-detected by `StatementFileParser`.
 - **Categorization:** whole-word matching, rule precedence (override → merchant → keyword → `OTHER`), direction
   mismatch.
 - **Tests:** a changed behavior with no test (refer to `java-testing`).

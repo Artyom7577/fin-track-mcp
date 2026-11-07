@@ -36,9 +36,6 @@ final class MockFiles {
     private MockFiles() {
     }
 
-    /**
-     * Writes both files and returns the number of statement lines in each.
-     */
     static int write(Scenario scenario, long seed, Path directory, String baseName) throws IOException {
         Iterable<StatementWriter> writers =
                 List.of(new XlsxStatementWriter(clockFor(scenario)), new CsvStatementWriter());

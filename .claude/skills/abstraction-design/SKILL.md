@@ -4,7 +4,7 @@ description: >-
   Invoke BEFORE introducing, changing, or reviewing any interface, sealed hierarchy, generic type
   parameter, or shared supertype in Java code of the fin-track-mcp repo — and whenever 2+
   records/classes look similar and "extracting the common part" is tempting (the per-tool result
-  records, EvocaXlsxParser vs GenericCsvParser internals, the monthly summary records). Also invoke
+  records, XlsxFormatReader vs CsvFormatReader internals, the monthly summary records). Also invoke
   when the Stop hook requires an abstraction pass over changed Java types (it is a
   definition-of-done step). Triggers: "abstraction", "interface", "port", "sealed", "hierarchy",
   "base class", "extract common", "shared shape", "generic", "supertype", a new record resembling
@@ -31,11 +31,13 @@ These already passed the gate; don't relitigate them, and don't treat them as pr
 
 | Abstraction | Gate | Why |
 |---|---|---|
-| `StatementParser` (application port) | #4 + #1 | Hexagonal port with two MVP adapters (`EvocaXlsxParser`, `GenericCsvParser`) and planned more (`AmeriaParser`, `PdfParser`); `ParserFactory` dispatches over them |
+| `StatementParser` (application port) | #4 | Hexagonal port: `StatementFileParser` now, test fakes in `application`, more banks / PDF planned |
+| `FormatReader` (internal to `adapter-parser`) | #1 | `StatementFileParser` dispatches over `XlsxFormatReader` and `CsvFormatReader` |
+| `sealed Cell` (`adapter-parser/format`) | #2 | Closed set of cell kinds; `EvocaRowMapper` switches exhaustively |
 | `TransactionRepository` (application port) | #4 | Hexagonal port; keeps JDBC/SQLite out of the application, planned second adapter (Postgres), in-memory double in tests |
 | `ExchangeRateProvider` (application port) | #4 | Strategy at a seam: `FixedRateProvider` now, `CbaRateProvider` + cache planned |
 | `CategorizationRule` (domain) | #1 | The chain iterates a `List<CategorizationRule>` — `MerchantOverrideRule`, `KnownMerchantRule`, `KeywordRule`, later ML |
-| `sealed RowResult` = `Imported \| Duplicate \| Rejected` | #2 | Closed outcome set; `ImportService` folds it exhaustively into `ImportSummary` |
+| `sealed RowOutcome` = `Imported \| Duplicate \| Rejected` | #2 | Closed outcome set; `ImportService` folds it exhaustively into `ImportSummary` |
 | `sealed FinanceException` + subtypes | #2 | Closed failure set; the MCP layer maps each subtype to an actionable tool error |
 
 A *new* port, a new sealed hierarchy, or a new subtype of these still needs a verdict.
@@ -46,12 +48,12 @@ Before introducing ANY interface / hierarchy / generic / shared supertype, at le
 YES — verified in code, not assumed:
 
 1. **Dispatch exists.** A method accepts more than one of the types, a `switch`/`instanceof` runs
-   over them, or a collection mixes them (`ParserFactory` iterating parsers; the categorization
+   over them, or a collection mixes them (`StatementFileParser` choosing a `FormatReader`; the categorization
    chain iterating rules). Verify with grep, never from memory. For a *new* design, the dispatching
    consumer must be created in the same change and named in the verdict — an abstraction never
    precedes or outlives its consumer.
 2. **A closed set of variants/outcomes** needs exhaustive handling → sealed interface + record or
-   class variants, consumed by an exhaustive `switch` with **no `default`** (`RowResult`;
+   class variants, consumed by an exhaustive `switch` with **no `default`** (`RowOutcome`;
    `FinanceException` and the MCP layer's error mapping).
 3. **A genuinely type-independent algorithm** exists → generic (rare here; a fold or
    top-N over arbitrary elements only when the logic is provably identical for every element type).
@@ -75,8 +77,8 @@ finish the job.
   convergence, not duplication.
 - **A merge/assembly point.** One private `toResult(...)` method per tool IS the abstraction for
   shared knowledge — don't replace it with a type hierarchy.
-- **Parser internals.** `EvocaXlsxParser` and `GenericCsvParser` both parse dates and amounts —
-  that is not a reason for an `AbstractStatementParser`. The port is the abstraction; shared
+- **Parser internals.** A second bank's row rules and `EvocaRowMapper` will both parse dates and
+  amounts — that is not a reason for an `AbstractRowMapper`. The port is the abstraction; shared
   ≲15-line helpers stay private in each, substantial shared logic goes to a collaborator.
 - **An interface "for testability".** Plain constructors already let a test pass a fake or a mock
   of the concrete class. An interface with one `*Impl` is not a seam — the pre-approved ports are

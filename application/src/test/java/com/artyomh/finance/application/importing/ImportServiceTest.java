@@ -35,8 +35,9 @@ class ImportServiceTest {
     private final InMemoryCategoryOverrideRepository overrides = new InMemoryCategoryOverrideRepository();
     private final List<ParsedRow> rows = new ArrayList<>();
     private final Collection<RowProblem> problems = new ArrayList<>();
+    private final Collection<FileWarning> warnings = new ArrayList<>();
     private final ImportService service = new ImportService(
-            file -> new ParseResult(rows, problems), repository, fixedUsdRate(), categorizers());
+            file -> new ParseResult(rows, problems, warnings), repository, fixedUsdRate(), categorizers());
 
     @Test
     void newRowsAreAddedAndCategorized() {
@@ -117,7 +118,7 @@ class ImportServiceTest {
 
     @Test
     void amdNeverAsksTheRateProvider() {
-        ImportService strict = new ImportService(file -> new ParseResult(rows, problems), repository,
+        ImportService strict = new ImportService(file -> new ParseResult(rows, problems, warnings), repository,
                 (currency, date) -> {
                     throw new AssertionError("rate requested for " + currency);
                 }, categorizers());
@@ -167,7 +168,21 @@ class ImportServiceTest {
     void emptyStatementAddsNothing() {
         ImportSummary summary = service.importFile(FILE);
 
-        assertThat(summary).isEqualTo(new ImportSummary("october.xlsx", 0, 0, 0, List.of()));
+        assertThat(summary).isEqualTo(new ImportSummary("october.xlsx", 0, 0, 0, List.of(), List.of()));
+    }
+
+    @Test
+    void fileWarningsPassThroughWithoutCountingAsRows() {
+        rows.add(amd(1, "SAS SUPERMARKET", "5000"));
+        FileWarning tail = new FileWarning(FileWarning.Code.ROWS_AFTER_TOTALS,
+                "3 rows after the totals line were not imported", 3);
+        warnings.add(tail);
+
+        ImportSummary summary = service.importFile(FILE);
+
+        assertThat(summary.rowsRead()).isEqualTo(summary.added() + summary.duplicates() + summary.rejected().size());
+        assertThat(summary.rowsRead()).isEqualTo(1);
+        assertThat(summary.warnings()).containsExactly(tail);
     }
 
     @Test

@@ -28,7 +28,7 @@ depends on the server.
 |---|---|
 | `domain` | **By concept**: `transaction`, `money`, `category`, `categorization`, `merchant`; flat `exception` (detection over many transactions lives in `application/analysis`) |
 | `application` | **`service/<usecase>`** (service + its result records), flat **`port`** (outbound interfaces + types only they use), flat `exception` |
-| `adapter-parser` | **By bank / format**: `evoca`, `csv`; parser selection in `selection` (`ParserFactory`); flat `exception` if it needs subtypes |
+| `adapter-parser` | `StatementFileParser` + `ParserLimits` at the root; **by format** in `format` (readers, `Cell`); **by bank** in `evoca` (header, row rules); flat `exception` |
 | `adapter-persistence` | **By table group**: `transaction`, `category` (overrides), `importlog`; flat `exception`. Migrations in `src/main/resources/db/migration` |
 | `adapter-fx` | **By rate source**: `fixed` (`FixedRateProvider`); later `cba` |
 | `mockdata` | **By use case**: `scenario` (`Scenario` + Builder, sealed `ScenarioEntry`, `Scenarios` Object Mother), `generator` (`StatementGenerator`, `GeneratedStatement`, sealed `StatementLine`), `writer` (`StatementWriter`, XLSX / CSV), `cli` (mains). `writer` → `generator` → `scenario` only; `writer` never sees `scenario`; nothing depends on `cli` (ArchUnit `MockdataArchitectureTest`) |
@@ -57,13 +57,13 @@ depends on the server.
     - **Result records live next to the service that returns them.** Something shared by several
       analysis use cases (`Percent`) sits at the `analysis` root as `public`, not in a `common`/`dto` package.
     - `port`: `StatementParser`, `TransactionRepository`, `ExchangeRateProvider`, override / import-log
-      ports — and the types that exist only to cross a port (`ParsedStatement`, `StatementHeader`).
+      ports — and the types that exist only to cross a port (`ParseResult`, `ParsedRow`, `RowProblem`).
       Ports are pre-approved abstractions (CLAUDE.md); a new one still goes through `abstraction-design`.
     - A command/parameter record a service takes (`ImportRequest`) lives in that `service/<usecase>`.
 
 3. **Adapters: grouped by the outside thing they adapt.**
-    - Parser: `adapter/parser/evoca/EvocaXlsxParser`, `adapter/parser/csv/GenericCsvParser`,
-      `adapter/parser/selection/ParserFactory`. A new bank = a new sibling package (`ameria`) + one
+    - Parser: `adapter/parser/StatementFileParser`, `adapter/parser/format/XlsxFormatReader`,
+      `adapter/parser/evoca/EvocaRowMapper`. A new bank = a new sibling package (`ameria`) + one
       registration (→ `statement-import`). Helpers used by one format stay package-private in it.
     - Persistence: `adapter/persistence/transaction/SqliteTransactionRepository`,
       `…/category/SqliteCategoryOverrideRepository`, `…/importlog/SqliteImportLogRepository`. Row mappers

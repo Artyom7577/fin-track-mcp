@@ -25,7 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DefaultScenarioCategorizationTest {
 
-    // the intended category of every merchant the default scenario produces, as the cleaner names it
     private static final Map<Payment, Category> INTENDED = Map.ofEntries(
             entry(income("TRANSFER SALARY ACME LLC"), Category.SALARY),
             entry(income("TRANSFER UPWORK ESCROW INC"), Category.FREELANCE),

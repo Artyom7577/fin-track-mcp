@@ -17,8 +17,8 @@ Where this generic skill conflicts with `CLAUDE.md`, CLAUDE.md wins.
 - **No mirroring records** — don't mint a record that copies another's fields (a `SearchTransactionsParams` that
   mirrors `TransactionQuery` field-for-field is banned until the shapes truly diverge).
 - **Abstraction only through the `abstraction-design` gate** — no base classes or default-method interfaces to
-  share shape. `EvocaXlsxParser` and `GenericCsvParser` both parse dates and amounts; that is *not* a reason for an
-  `AbstractStatementParser`. `CategorySpend` and `MerchantSpend` both have a total and a count; not a reason for a
+  share shape. A second bank's row rules and `EvocaRowMapper` will both parse dates and amounts; that is *not* a reason
+  for an `AbstractRowMapper`. `CategorySpend` and `MerchantSpend` both have a total and a count; not a reason for a
   base record.
 - **Shared logic goes to the innermost module both users already depend on** — never against the dependency
   direction:
@@ -62,7 +62,7 @@ Where this generic skill conflicts with `CLAUDE.md`, CLAUDE.md wins.
 
 5. **Control Flow Awareness**:
    If the duplicated code contains `return`, `break`, `continue`, early returns, or thrown exceptions, handle the
-   extraction carefully. You may need to return an explicit state (an enum, a sealed result such as `RowResult`, an
+   extraction carefully. You may need to return an explicit state (an enum, a sealed result such as `RowOutcome`, an
    `Optional`) or accept a callback so the caller retains correct execution flow.
 
 ## Implementation Workflow

@@ -4,7 +4,8 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
- * Replaces every full card number with {@code ****} plus its last four digits, so a PAN is never stored or hashed.
+ * Replaces every 12–19 digit card number, optionally split by single spaces or dashes, with {@code ****} plus its last
+ * four digits, so a PAN is never stored or hashed.
  */
 public final class CardNumberMasker {
 

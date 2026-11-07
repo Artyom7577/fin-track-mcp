@@ -17,7 +17,7 @@ most once per task**, and only when the test under construction actually exercis
 
 - **`spring-boot-testing`** — the primary skill for this agent: the test taxonomy per module (plain JUnit vs SQLite temp
   file vs `@SpringBootTest` vs STDIO contract), Boot 4 test modules, `@MockitoBean`, mock-data fixtures.
-- **`statement-import`** — when testing parsers, `ParserFactory`, dedupe, `RowResult`/`ImportSummary`.
+- **`statement-import`** — when testing parsers, `StatementFileParser`, dedupe, `RowOutcome`/`ImportSummary`.
 - **`sqlite-jdbcclient`** — when testing repositories (temp-file SQLite, transactions, minor-unit mapping).
 - **`flyway-migrations`** — when a test depends on a migrated schema.
 - **`money-and-fx`** — when asserting amounts, rounding, conversion and currency rules.
@@ -115,7 +115,7 @@ In **strictly preferred order**:
    subscription/unusual detection) and `application` (services over fake ports). Milliseconds per class.
 2. **Adapter tests without Spring** —
    - `adapter-parser`: parse fixture files (`mockdata`-generated or tiny `src/test/resources` files)
-     and assert `RowResult`s; `ParserFactory` header detection.
+     and assert `RowOutcome`s; `StatementFileParser` file checks and header detection.
    - `adapter-persistence`: a real SQLite file in `@TempDir`, Flyway migrate, a real `JdbcClient` over a
      simple `DataSource` — dedupe on repeated insert, minor-unit round-trip, aggregation queries.
    - `adapter-fx`: plain unit tests.

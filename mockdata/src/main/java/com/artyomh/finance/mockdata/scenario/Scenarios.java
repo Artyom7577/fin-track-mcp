@@ -16,9 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Named scenarios; the default spends about 692,000 AMD a month and about 1,042,000 in October, USD never goes
- * negative because its opening balance covers every subscription, and AMD never going negative is verified across
- * 200 seeds.
+ * Named scenarios; the default spends about 692,000 AMD a month (1,042,000 in October), its USD opening balance
+ * covers every subscription, and AMD staying non-negative is verified across 200 seeds.
  */
 public final class Scenarios {
 

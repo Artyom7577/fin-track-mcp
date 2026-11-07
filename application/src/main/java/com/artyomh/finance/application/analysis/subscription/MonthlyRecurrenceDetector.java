@@ -21,7 +21,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
- * Finds charges that repeat across months at a stable amount; thresholds come from configuration, never literals.
+ * Finds charges that repeat across months at a stable amount.
  */
 public final class MonthlyRecurrenceDetector {
 

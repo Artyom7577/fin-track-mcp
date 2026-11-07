@@ -15,7 +15,7 @@ description: >-
   dependencies (spring-boot-starter-test, archunit-junit5, flyway-core test
   scope), fakes vs mocks, @MockitoBean, a slow suite from too many
   application contexts, flaky tests from dates/locale/random seeds, testing
-  RowResult outcomes, idempotent import, money rounding, tool error messages.
+  RowOutcome outcomes, idempotent import, money rounding, tool error messages.
 ---
 
 # Testing & TDD (Spring Boot 4, Java 25)
@@ -78,10 +78,11 @@ Tests mirror the class-under-test's package in the **same module** (`package-lay
   "OPENAI"), subscription / unusual-spend detection, transaction-id hashing (same input → same id;
   occurrence index distinguishes identical same-day rows).
 - **`application`:** unit tests with **hand-written fakes of the ports**. `ImportService` folds
-  `RowResult`s into `ImportSummary`; importing the same rows twice → `added 0, duplicates n`; "month with
+  `RowOutcome`s into `ImportSummary`; importing the same rows twice → `added 0, duplicates n`; "month with
   no data" throws with the available range; services never see a framework type.
-- **`adapter-parser`:** parsers on fixture files from `mockdata`; `ParserFactory` picks by headers and
-  rejects an unknown format with the supported list.
+- **`adapter-parser`:** `StatementFileParser` on files written by `mockdata`'s writers (round trip, malformed
+  rows), hand-made fixtures in `src/test/resources/irregular/`, `XlsxFixture` for typed cells; every
+  `ReadFailure` and every row reason has a test.
 - **`adapter-persistence`:** repository + migration tests on a temp SQLite file (§5).
 - **`adapter-fx`:** unit tests (`FixedRateProvider` from a properties record; date is carried even if
   ignored).
@@ -208,20 +209,20 @@ class ImportServiceTest {
 ```java
 package com.artyomh.finance.adapter.parser.evoca;
 
-class EvocaXlsxParserTest {
+class StatementFileParserTest {
 
     @TempDir
     Path dir;
 
-    private final EvocaXlsxParser parser = new EvocaXlsxParser();
+    private final StatementFileParser parser = new StatementFileParser(ParserLimits.DEFAULT);
 
     @Test
-    void parsesEveryRowOfAGeneratedStatement() {
-        Path file = MockStatements.writeEvocaXlsx(dir, MockStatements.october2026());
+    void roundTripsTheDefaultScenario() {
+        GeneratedStatement statement = generate(Scenarios.defaultSixMonths());
 
-        ParsedStatement statement = parser.parse(file);
+        ParseResult result = parser.parse(write(new XlsxStatementWriter(CLOCK), statement));
 
-        assertThat(statement.rows()).hasSize(MockStatements.october2026().size());
+        assertThat(result.rows()).containsExactlyElementsOf(expectedRows(statement));
     }
 
     @Test

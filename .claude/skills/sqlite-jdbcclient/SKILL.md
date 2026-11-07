@@ -59,7 +59,7 @@ mapping rows to domain records; translating persistence failures.
 
 **Not for:** creating or changing tables/indexes (→ `flyway-migrations`); how `Money` rounds or converts
 USD→AMD (→ `money-and-fx`; this skill only stores what the domain hands it); dedupe-hash rules and
-`RowResult` folding (→ `statement-import`); which category wins (→ `categorization-rules`); test layout
+`RowOutcome` folding (→ `statement-import`); which category wins (→ `categorization-rules`); test layout
 (→ `spring-boot-testing`).
 
 ## Quick reference
@@ -231,7 +231,7 @@ ON CONFLICT (id) DO NOTHING
 ```
 
 - Affected rows **1 → `Imported`, 0 → `Duplicate`** — the repository reports which ids were new; the
-  application folds that into `RowResult`s / `ImportSummary`.
+  application folds that into `RowOutcome`s / `ImportSummary`.
 - **Prefer `ON CONFLICT (id) DO NOTHING` over `INSERT OR IGNORE`.** `OR IGNORE` also swallows `NOT NULL`
   and `CHECK` violations — a row with an invalid `direction` would be silently counted as a
   "duplicate". `ON CONFLICT (id)` ignores only the uniqueness conflict on the key you name; everything

@@ -51,7 +51,7 @@ public final class ImportService {
         for (Transaction transaction : candidates) {
             outcomes.add(outcomeOf(transaction, inserted));
         }
-        return summarize(sourceFile, outcomes);
+        return summarize(sourceFile, outcomes, parsed.warnings());
     }
 
     private List<Transaction> toTransactions(SequencedCollection<ParsedRow> rows, Categorizer categorizer, String sourceFile) {
@@ -86,14 +86,15 @@ public final class ImportService {
         };
     }
 
-    private static RowOutcome outcomeOf(Transaction transaction, Set<TransactionId> inserted) {
+    private static RowOutcome outcomeOf(Transaction transaction, Collection<TransactionId> inserted) {
         if (inserted.contains(transaction.id())) {
             return new RowOutcome.Imported(transaction);
         }
         return new RowOutcome.Duplicate(transaction.id());
     }
 
-    private static ImportSummary summarize(String sourceFile, Collection<RowOutcome> outcomes) {
+    private static ImportSummary summarize(String sourceFile, Collection<RowOutcome> outcomes,
+                                           Collection<FileWarning> warnings) {
         int added = 0;
         int duplicates = 0;
         Collection<RowProblem> rejected = new ArrayList<>();
@@ -104,6 +105,6 @@ public final class ImportService {
                 case RowOutcome.Rejected rejection -> rejected.add(rejection.problem());
             }
         }
-        return new ImportSummary(sourceFile, outcomes.size(), added, duplicates, rejected);
+        return new ImportSummary(sourceFile, outcomes.size(), added, duplicates, rejected, warnings);
     }
 }

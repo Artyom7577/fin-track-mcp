@@ -13,9 +13,9 @@ testable without Spring or MCP; the MCP layer only translates tool calls into se
 prose — it returns numbers and structured data; Claude decides which tools to call and writes the explanation.
 
 > **Current state:** `domain` (model, categorization with built-in defaults, merchant cleaning), `application`
-> (import, spending, comparison, subscriptions, ports) and `mockdata` (scenario → generator → writers, CLI) are built
-> and unit-tested. Adapters and MCP tools are next; `FinanceMcpApplication` is still an MCP server over STDIO with
-> zero tools.
+> (import, spending, comparison, subscriptions, ports), `mockdata` (scenario → generator → writers, CLI) and
+> `adapter-parser` (Evoca .xlsx / .csv) are built and unit-tested. The other adapters and MCP tools are next;
+> `FinanceMcpApplication` is still an MCP server over STDIO with zero tools.
 
 ## Module boundaries (strict, hexagonal — dependencies point inward)
 
@@ -24,7 +24,7 @@ prose — it returns numbers and structured data; Claude decides which tools to 
 | root `pom.xml` (parent) | Java 25, Spring Boot 4 + Spring AI 2.0 BOMs, plugin versions, the module list | — |
 | `domain` | `Transaction`, `Money`, `Currency`, `Direction`, `Category`, categorization rules (`CategorizationRule` chain), merchant cleaning and card masking. **Pure Java — no Spring, no POI, no JDBC** | nothing |
 | `application` | Use-case services (`ImportService`, `SpendingService`, `SubscriptionService`, `ComparisonService`, …), **port interfaces** (`StatementParser`, `TransactionRepository`, `CategoryOverrideRepository`, `ExchangeRateProvider`), result records (`ImportSummary`, `RowOutcome`, `MonthlySpending`, …), `Percent`. **No Spring, no framework imports** | domain |
-| `adapter-parser` | `EvocaXlsxParser` (Apache POI), `GenericCsvParser` (Commons CSV), `ParserFactory` (picks the parser from file headers) | application |
+| `adapter-parser` | `StatementFileParser` (file checks in order, then the bank layout), `format` (bank-agnostic `XlsxFormatReader` with Apache POI, `CsvFormatReader` with Commons CSV), `evoca` (header aliases, row rules); POI and Commons CSV stay inside `format` | application |
 | `adapter-persistence` | `SqliteTransactionRepository` etc. (`JdbcClient`), Flyway migrations (`src/main/resources/db/migration`) | application |
 | `adapter-fx` | `FixedRateProvider` (rate from config); later `CbaRateProvider` + cache | application |
 | `mockdata` | Fake Evoca-style statements: `scenario` (data, `Scenarios`) → `generator` (rows + balances, seeded) → `writer` (.xlsx / .csv, injected `Clock`), plus `cli`; used by tests (test scope) and for demos | domain, POI, Commons CSV |
@@ -37,7 +37,7 @@ prose — it returns numbers and structured data; Claude decides which tools to 
   SQLite, JDBC or Spring AI classes. `graphify check` exits 2 on a violation; ArchUnit tests fail the build.
 - New tool → `mcp-server` (thin: validate input, call one service, map the result). New use case or port →
   `application`. New business rule / value type → `domain`. New bank format → a new
-  `StatementParser` in `adapter-parser`, registered in `ParserFactory`. New table/query → persistence.
+  bank package in `adapter-parser` (like `evoca`) reusing `format`, chosen in `StatementFileParser`. New table/query → persistence.
 - **"Later" features must already have their interface in the MVP** (daily CBA rates, more banks, PDF, budgets,
   Streamable HTTP, web dashboard) so adding them never changes existing code — but don't build them now.
 
@@ -45,13 +45,13 @@ prose — it returns numbers and structured data; Claude decides which tools to 
 
 | Port | Defined in | MVP adapter | Later |
 |---|---|---|---|
-| `StatementParser` | application | `EvocaXlsxParser`, `GenericCsvParser` | `AmeriaParser`, `PdfParser` |
+| `StatementParser` | application | `StatementFileParser` (Evoca .xlsx / .csv) | an `ameria` layout, a PDF format reader |
 | `TransactionRepository` | application | `SqliteTransactionRepository` | Postgres repository |
 | `CategoryOverrideRepository` | application | `SqliteCategoryOverrideRepository` | — |
 | `ExchangeRateProvider` | application | `FixedRateProvider` (config) | `CbaRateProvider` + cache |
 | `CategorizationRule` | domain | `MerchantOverrideRule`, then `KnownMerchantRule` (YAML, then `DefaultCategorizationData`), then `KeywordRule` (YAML, then defaults), fallback → `OTHER` / `OTHER_INCOME` by direction | ML-based rule |
 
-Hexagonal (overall) · Adapter (one parser per bank format) · Factory (parser from file headers) · Strategy
+Hexagonal (overall) · Adapter (one format reader per file type, one layout per bank) · Factory (format reader from the file's first bytes) · Strategy
 (exchange-rate source) · Chain of Responsibility (categorization: `Optional<Category> apply(Transaction)`, empty =
 "ask the next rule", first answer wins) · Repository · Facade (one service call per MCP tool) · Value Object
 (`Money` — never add USD to AMD) · DI (Spring wires adapters into services in the server module only).
@@ -69,10 +69,11 @@ Hexagonal (overall) · Adapter (one parser per bank format) · Factory (parser f
 - **Known limitation — refunds:** a refund is INCOME from an expense merchant, so it lands in `OTHER_INCOME` and
   counts as income, not as a reduction of the original category (later: a `REFUNDS` category or netting).
 - **Keyword matching is whole-word**: "ENA" (electricity) must not match "OPENAI".
-- **Idempotent import:** transaction id = hash of date, description, amount, currency and occurrence index — importing
+- **Idempotent import:** transaction id = hash of date, masked description, direction, amount, currency and occurrence index — importing
   the same file twice adds nothing. `import_log` records file name/hash and added/duplicate/rejected counts.
 - **Every row ends in exactly one outcome:** `sealed interface RowOutcome permits Imported, Duplicate, Rejected`;
-  `ImportService` folds them into an `ImportSummary` (added, duplicates, rejected with reasons).
+  `ImportService` folds them into an `ImportSummary` (added, duplicates, rejected with reasons). Data skipped as
+  a whole (lines after a totals line, extra sheets) is a `FileWarning` with its row count, never a rejected row.
 
 ## MCP tools (the product surface — see `mcp-server-tools`)
 
@@ -103,7 +104,7 @@ Hexagonal (overall) · Adapter (one parser per bank format) · Factory (parser f
     before editing Spring AI code — Spring AI 2.0 differs from 1.x tutorials
   - any SQL / `JdbcClient` / repository → `sqlite-jdbcclient`; any schema change → `flyway-migrations`
   - money, currency, rounding, exchange rates → `money-and-fx`
-  - parsers, `ParserFactory`, import, dedupe, `RowOutcome` → `statement-import`
+  - parsers, `StatementFileParser`, import, dedupe, `RowOutcome` → `statement-import`
   - categorization rules, keywords, overrides → `categorization-rules`
   - any comment or JavaDoc → `comment-style`; tests → `spring-boot-testing`
 - **Principal-engineer bar.** `effective-java` before any method/class; `java-25-idioms`; `oop-architecture` for
