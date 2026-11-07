@@ -28,9 +28,9 @@ Facade, Value Object, DI) are decided — apply them, don't relitigate them.
 - **Static factory** — hide construction / name the intent: `Money.of("9.99", USD)`,
   `Money.ofMinor(999, USD)`, `YearMonth.parse(month)` wrapped as a domain `Month` if one exists.
   Prefer to a public constructor when creation has logic or a meaningful name.
-- **Factory (selection)** — `ParserFactory` picks the `StatementParser` from the file's headers.
-  It iterates the injected parsers and asks each whether it accepts the file; it does not `switch`
-  on bank names. An unknown format is a `FinanceException` listing the supported formats.
+- **Factory (selection)** — `StatementFileParser` picks the `FormatReader` from the file's first
+  bytes (zip → .xlsx, text → .csv) and the bank layout from the header. A file it can't read is a
+  `StatementReadException` naming what is supported.
 - **Builder** — only for objects with many *optional* fields where a record's canonical constructor
   is unwieldy (a mock-statement row with a dozen optional columns in `mockdata`). Don't add
   a builder to a simple record like `Transaction` or `ImportSummary`.
@@ -38,8 +38,8 @@ Facade, Value Object, DI) are decided — apply them, don't relitigate them.
 ## Structural
 
 - **Adapter / anti-corruption layer** — wrap an external library or file format so its types don't
-  leak inward. `EvocaXlsxParser` adapts Apache POI cells into `RowResult`s; `GenericCsvParser`
-  adapts Commons CSV; `SqliteTransactionRepository` adapts `JdbcClient` rows (minor units) into
+  leak inward. `XlsxFormatReader` adapts Apache POI cells and `CsvFormatReader` Commons CSV records
+  into `Cell`s, so no library type reaches `evoca`; `SqliteTransactionRepository` adapts `JdbcClient` rows (minor units) into
   `Transaction`s (`BigDecimal`); `FixedRateProvider` adapts config into a rate. Library types never
   cross the adapter.
 - **Facade** — one service call per MCP tool: `spending_by_category(month)` →
@@ -54,9 +54,8 @@ Facade, Value Object, DI) are decided — apply them, don't relitigate them.
 
 - **Strategy** — replace an `if/else`/`switch` that selects behaviour with an interface +
   implementations (or a lambda) when the set varies or grows: `ExchangeRateProvider` is
-  `FixedRateProvider` today and `CbaRateProvider` + cache later; `StatementParser` gets one
-  implementation per bank format. Spring injects `List<StatementParser>` into `ParserFactory` in the
-  server module's wiring.
+  `FixedRateProvider` today and `CbaRateProvider` + cache later; `FormatReader` has one
+  implementation per file format, chosen by `StatementFileParser`.
 - **Chain of Responsibility** — categorization: an ordered `List<CategorizationRule>`, each
   `Optional<Category> apply(Transaction)`; empty means "ask the next rule", first answer wins, the
   chain ends in a fallback to `OTHER`. Order is `MerchantOverrideRule` → `KnownMerchantRule` → `KeywordRule` (YAML
@@ -64,10 +63,10 @@ Facade, Value Object, DI) are decided — apply them, don't relitigate them.
   one 80-line method. See `categorization-rules`.
 - **Sealed type + exhaustive switch (algebraic result)** — model a closed set of outcomes as a
   `sealed interface` permitting `record`s, matched with a `switch` that has **no** `default`:
-  `RowResult = Imported | Duplicate | Rejected(reason)`, folded by `ImportService` into an
+  `RowOutcome = Imported | Duplicate | Rejected(reason)`, folded by `ImportService` into an
   `ImportSummary`. A new case is a compile error at every consumer. See `java-25-idioms`.
 - **Template method** — a fixed skeleton with pluggable steps; in modern Java prefer passing a
-  lambda to a higher-order method (`readRows(sheet, this::toRowResult)`) over an abstract-class
+  lambda to a higher-order method (`readRows(sheet, this::toRowOutcome)`) over an abstract-class
   template shared by parsers.
 
 ## Enterprise / domain

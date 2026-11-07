@@ -24,8 +24,9 @@ class CardNumberMaskerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"POS ****9012 SAS", "4578****9012", "YANDEX GO 2026 10 05", "45781234567", "ԵՐԵՎԱՆ ՍԻԹԻ"})
-    void leavesShortDigitRunsAndMaskedNumbersAlone(String text) {
+    @ValueSource(strings = {"POS ****9012 SAS", "4578****9012", "YANDEX GO 2026 10 05", "45781234567",
+            "45781234567890123456", "ԵՐԵՎԱՆ ՍԻԹԻ"})
+    void leavesElevenOrTwentyDigitRunsAndMaskedNumbersAlone(String text) {
         assertThat(CardNumberMasker.mask(text)).isEqualTo(text);
     }
 

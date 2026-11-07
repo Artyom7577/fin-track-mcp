@@ -36,7 +36,7 @@ Prefer these conventions unless the surrounding code has an explicit reason not 
 - **Constructor injection.** Collaborators arrive through one constructor into `private final` fields. Domain and
   application classes are plain constructors; Spring beans are declared only in `mcp-server`. Field/setter
   `@Autowired` is a `style-check` Rule 1 violation — mention it only if `style-check` would miss it.
-- **Records** for value objects, results (`ImportSummary`, `RowResult` variants) and tool outputs; `sealed` +
+- **Records** for value objects, results (`ImportSummary`, `RowOutcome` variants) and tool outputs; `sealed` +
   exhaustive `switch` (no `default`) for closed sets; enums for fixed choices (`Category`, `Currency`, `Direction`).
   No Lombok. ≤ 3–4 parameters (else a parameter-object record); no boolean flag parameters.
 - **Thin MCP tools.** An `@McpTool` method validates input, calls **one** service, maps the result. Business logic in a
@@ -52,8 +52,8 @@ Prefer these conventions unless the surrounding code has an explicit reason not 
    near-identical blocks is a candidate; two is usually fine (a ≲15-line helper duplicated in two classes is
    deliberate per CLAUDE.md).
 2. **Naming** — method, class, field, variable, parameter names. Domain vocabulary is fixed: `Transaction`, `Money`,
-   `Currency`, `Direction`, `Category`, `CategorizationRule`, `RowResult` (`Imported`/`Duplicate`/`Rejected`),
-   `ImportSummary`, `StatementParser`, `ParserFactory`, `ExchangeRateProvider` — flag drift (`Txn`, `Amount` for a
+   `Currency`, `Direction`, `Category`, `CategorizationRule`, `RowOutcome` (`Imported`/`Duplicate`/`Rejected`),
+   `ImportSummary`, `StatementParser`, `StatementFileParser`, `ExchangeRateProvider` — flag drift (`Txn`, `Amount` for a
    `Money`, `Type` for a `Direction`, `Tag` for a `Category`).
 3. **Complexity** — methods over ~60 lines or cyclomatic complexity > 10. Nested generics. Any ternary `?:` in
    `src/main` (banned; `style-check` owns it). Boolean parameter explosion. > 3–4 parameters without a record.
@@ -108,7 +108,7 @@ Do not invoke skills outside your lane.
   three is a refactor candidate.
 - **Q6. Records for immutable data carriers.** A class that is essentially fields + getters with no behavior MUST be a
   `record`. Exceptions: needs mutable/identity semantics, or a framework that genuinely requires a JavaBean.
-- **Q7. Sealed for closed hierarchies.** A base with a fixed, known set of subtypes (`RowResult`, `FinanceException`)
+- **Q7. Sealed for closed hierarchies.** A base with a fixed, known set of subtypes (`RowOutcome`, `FinanceException`)
   MUST be `sealed`, with exhaustive switches (no `default`) at the consumers. A `default` branch over a sealed type or
   over `Category`/`Currency`/`Direction` is HIGH.
 - **Q8. No commented-out code in production files.** Removed code lives in history.

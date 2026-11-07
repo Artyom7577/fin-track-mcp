@@ -44,7 +44,7 @@ Do not act until the user confirms you have reached a shared understanding.
 - **Failure modes**: what each bad input / unknown file / unknown bank format / month with no data /
   unknown category or merchant / malformed row / SQLite locked / unsupported currency returns —
   which `FinanceException` subtype, and which tool error message listing valid options ("No data
-  for 2026-03. Available: 2026-05 to 2026-10"). A bad *row* is a `Rejected` `RowResult`, not an
+  for 2026-03. Available: 2026-05 to 2026-10"). A bad *row* is a `Rejected` `RowOutcome`, not an
   exception.
 - **Idempotency & data**: does it write? Is re-running it safe (re-import adds nothing)? Does it need
   a table or column (`flyway-migrations`, `sqlite-jdbcclient`), and how do existing rows migrate?

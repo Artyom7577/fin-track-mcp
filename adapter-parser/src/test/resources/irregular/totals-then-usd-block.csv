@@ -1,0 +1,9 @@
+Date,Description,Debit,Credit,Currency,Balance
+01.05.2026,TRANSFER SALARY ACME LLC,,850000.00,AMD,850000.00
+03.05.2026,TRANSFER RENT PAYMENT,250000.00,,AMD,600000.00
+Total,,250000.00,850000.00,,
+Closing balance,,,,,600000.00
+,,,,,
+USD account,,,,,
+Date,Description,Debit,Credit,Currency,Balance
+07.05.2026,ONLINE 4578****1234 NETFLIX.COM,9.99,,USD,240.01

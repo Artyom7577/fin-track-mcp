@@ -48,7 +48,7 @@ needs — not what the technology offers. An **adapter** implements it in an out
 
 | Port | Owner | Signature sketch | MVP adapter(s) | Later (interface must already fit) |
 |---|---|---|---|---|
-| `StatementParser` | application | `boolean supports(StatementHeader h)`; `ParsedStatement parse(Path file)` | `EvocaXlsxParser`, `GenericCsvParser` | `AmeriaParser`, `PdfParser` |
+| `StatementParser` | application | `ParseResult parse(Path file)` | `StatementFileParser` (Evoca .xlsx / .csv) | an `ameria` layout, a PDF format reader |
 | `TransactionRepository` | application | `int saveAll(List<Transaction>)` (skips existing ids), `List<Transaction> findByMonth(YearMonth)`, `Optional<MonthRange> availableMonths()` … | `SqliteTransactionRepository` | Postgres |
 | `ExchangeRateProvider` | application | `ExchangeRate rateFor(Currency from, LocalDate date)` | `FixedRateProvider` | `CbaRateProvider` + cache |
 | `CategorizationRule` | domain | `Optional<Category> apply(Transaction tx)` | `MerchantOverrideRule`, `KnownMerchantRule`, `KeywordRule`, fallback | ML rule |
@@ -71,7 +71,7 @@ Port rules:
 | A use case ("compare two months") | `application` service | plain constructor, ports injected |
 | A port (new outside capability) | `application` (or domain for rule-like strategies) | run `abstraction-design` |
 | Use-case result record (`ImportSummary`, `CategorySpending`) | `application` | MCP returns it as-is when it fits |
-| A new bank format | `adapter-parser`: new `StatementParser`, register in `ParserFactory` | `statement-import` |
+| A new bank format | `adapter-parser`: a sibling package of `evoca` reusing `format`, chosen in `StatementFileParser` | `statement-import` |
 | A table, column, query | `adapter-persistence` + Flyway migration | `sqlite-jdbcclient`, `flyway-migrations` |
 | A new rate source | `adapter-fx` implementing `ExchangeRateProvider` | `money-and-fx` |
 | A tool / resource / config / bean wiring | `mcp-server` | `mcp-server-tools` |
@@ -104,9 +104,9 @@ public class FinanceBeans {
     }
 
     @Bean
-    ImportService importService(ParserFactory parsers, CategorizationChain chain,
-                                ExchangeRateProvider rates, TransactionRepository repository) {
-        return new ImportService(parsers, chain, rates, repository);
+    ImportService importService(StatementParser parser, TransactionRepository repository,
+                                ExchangeRateProvider rates, CategorizerFactory categorizers) {
+        return new ImportService(parser, repository, rates, categorizers);
     }
 }
 ```
@@ -180,7 +180,7 @@ Spring in application, adapter-to-adapter via a transitive path, tools reaching 
 | Later | What must exist now | What must *not* exist now |
 |---|---|---|
 | CBA daily rates | `ExchangeRateProvider.rateFor(currency, date)`; `exchangeRate` stored per transaction | HTTP client, cache |
-| More banks / PDF | `StatementParser.supports(header)` + `ParserFactory` loop | `AmeriaParser` |
+| More banks / PDF | `StatementParser.parse(Path)`; bank-agnostic `format` readers below bank packages | `ameria` layout, PDF reader |
 | Postgres | `TransactionRepository` in domain terms, no SQLite types leak | second adapter |
 | Streamable HTTP / dashboard | tools are thin; services return records | web starter, controllers |
 | ML categorization | `CategorizationRule` chain | model code |

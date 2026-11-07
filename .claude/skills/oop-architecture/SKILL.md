@@ -23,9 +23,9 @@ new ports, also run `hexagonal-architecture` + `package-layout`.
   (`StatementParser`, the id hashing in `ImportService`, the `CategorizationRule` chain,
   `ExchangeRateProvider`). Split when a class grows a second concern.
 - **O — Open/closed.** Extend via new types, not by editing a `switch` that must handle all cases —
-  a new bank format is a new `StatementParser` registered in `ParserFactory`; a new categorization
+  a new bank format is a new bank package in `adapter-parser` reusing the `format` readers; a new categorization
   heuristic is a new `CategorizationRule` in the chain. *Except* the deliberate exhaustive `switch`
-  over a `sealed` type (that's the point: a new `RowResult` subtype forces a compile error where it
+  over a `sealed` type (that's the point: a new `RowOutcome` subtype forces a compile error where it
   must be handled).
 - **L — Liskov.** Subtypes honour the supertype's contract. Every `CategorizationRule` returns
   `Optional.empty()` for "not mine" and never throws for an unrecognised merchant; every
@@ -71,7 +71,7 @@ ArchUnit tests fail the build.
   `@McpTool`, `@ConfigurationProperties` and bean wiring only in `mcp-server`. Domain and
   application are plain Java — no Spring annotations, beans are declared in the server.
 - Don't let a library type leak across a boundary — map to the port's own type at the edge:
-  a parser yields `RowResult`s / domain `Transaction`s, never a POI `Row`; the repository returns
+  a parser yields `RowOutcome`s / domain `Transaction`s, never a POI `Row`; the repository returns
   `Transaction` / summary records, never a JDBC `ResultSet` or minor-unit `long`s (it converts at
   the boundary); a tool returns its own small result record, never an internal domain type that
   might grow fields Claude shouldn't see.
