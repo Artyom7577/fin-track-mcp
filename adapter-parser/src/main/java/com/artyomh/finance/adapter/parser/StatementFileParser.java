@@ -28,10 +28,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-/**
- * Checks a statement file in order (readable, not empty, first bytes, size, extension, header) and parses Evoca
- * .xlsx or .csv.
- */
 public final class StatementFileParser implements StatementParser {
 
     private static final byte[] ZIP_SIGNATURE = {0x50, 0x4B, 0x03, 0x04};

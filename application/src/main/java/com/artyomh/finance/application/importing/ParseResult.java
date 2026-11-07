@@ -4,9 +4,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.SequencedCollection;
 
-/**
- * Parsed rows, broken rows, and file-level warnings about data skipped as a whole.
- */
 public record ParseResult(SequencedCollection<ParsedRow> rows, Collection<RowProblem> problems,
                           Collection<FileWarning> warnings) {
 

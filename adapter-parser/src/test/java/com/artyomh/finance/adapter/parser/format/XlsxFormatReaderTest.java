@@ -234,7 +234,6 @@ class XlsxFormatReaderTest {
         return text.toString();
     }
 
-    // a workbook's parts as text, in zip order, so a test can rewrite one and zip them again
     private static Map<String, String> parts(Path workbook) throws IOException {
         Map<String, String> parts = new LinkedHashMap<>();
         try (ZipFile zip = new ZipFile(workbook.toFile())) {

@@ -39,9 +39,6 @@ public enum Category {
         return direction == Direction.INCOME;
     }
 
-    /**
-     * The category used when no rule matches.
-     */
     public static Category fallbackFor(Direction direction) {
         return switch (direction) {
             case INCOME -> OTHER_INCOME;

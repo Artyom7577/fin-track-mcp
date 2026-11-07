@@ -18,9 +18,6 @@ final class AmountText {
     private AmountText() {
     }
 
-    /**
-     * The signed amount, or empty when the text is not an amount in this grammar.
-     */
     static Optional<BigDecimal> parse(String text) {
         Matcher matcher = AMOUNT.matcher(strip(text));
         if (!matcher.matches()) {

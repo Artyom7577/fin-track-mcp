@@ -50,9 +50,6 @@ public final class EvocaRowMapper {
     private final EvocaColumns columns;
     private final int headerWidth;
 
-    /**
-     * A mapper for the columns of an accepted header line.
-     */
     public EvocaRowMapper(SourceLine header) {
         this.columns = EvocaColumns.locate(header.texts())
                 .orElseThrow(() -> new IllegalArgumentException("not an Evoca header, line " + header.lineNumber()));
@@ -148,8 +145,7 @@ public final class EvocaRowMapper {
             case Cell.Blank _ -> "";
             case Cell.Invalid _ -> throw errorValue(Column.DESCRIPTION);
         };
-        // control characters become spaces and invisible format characters (zero-width, bidi) go before masking,
-        // so a card number split by a tab, a line break or a zero-width space is still one number to the masker
+        // cleaned before masking, so a card number split by a tab, line break or zero-width space is still caught
         String visible = FORMAT_CHARACTERS.matcher(CONTROL_CHARACTERS.matcher(raw).replaceAll(" ")).replaceAll("");
         String description = CardNumberMasker.mask(collapse(visible));
         if (description.isEmpty()) {
@@ -233,7 +229,6 @@ public final class EvocaRowMapper {
         return words.stream().anyMatch(word -> BALANCE_WORDS.stream().anyMatch(word::startsWith));
     }
 
-    // the date cell, or the first non-empty cell when the date cell is empty, as a normalized label
     private String leadingLabel(SourceLine line) {
         Cell dateCell = line.cell(columns.position(Column.DATE));
         if (!(dateCell instanceof Cell.Blank)) {
@@ -259,9 +254,6 @@ public final class EvocaRowMapper {
                 + " column");
     }
 
-    /**
-     * Ends the mapping of one line with its reason; never escapes this class.
-     */
     private static final class RowRejected extends Exception {
 
         RowRejected(String reason) {

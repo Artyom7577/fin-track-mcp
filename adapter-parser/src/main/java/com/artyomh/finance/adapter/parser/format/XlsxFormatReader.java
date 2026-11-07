@@ -41,10 +41,6 @@ public final class XlsxFormatReader implements FormatReader {
     private final long maxUnpackedBytes;
     private final long maxElements;
 
-    /**
-     * A reader that rejects workbooks whose parts unpack to more than {@code maxUnpackedBytes}, or hold more XML
-     * elements than {@code maxDataRows} realistic rows, before POI loads them.
-     */
     public XlsxFormatReader(int maxDataRows, long maxUnpackedBytes) {
         this.maxDataRows = maxDataRows;
         this.maxUnpackedBytes = maxUnpackedBytes;

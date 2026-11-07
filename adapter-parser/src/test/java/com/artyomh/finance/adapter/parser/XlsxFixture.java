@@ -32,9 +32,6 @@ public final class XlsxFixture {
     public record Formula(String expression, Object cached) {
     }
 
-    /**
-     * An Excel error value such as {@code #N/A}.
-     */
     public record Error(FormulaError error) {
     }
 
@@ -54,9 +51,6 @@ public final class XlsxFixture {
     private final Map<String, List<String>> merged = new LinkedHashMap<>();
     private boolean date1904;
 
-    /**
-     * Uses the 1904 date system, as old Mac Excel files do.
-     */
     public XlsxFixture date1904() {
         date1904 = true;
         return this;

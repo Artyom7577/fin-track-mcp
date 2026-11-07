@@ -79,9 +79,6 @@ public final class EvocaColumns {
         return locate(labels).isPresent();
     }
 
-    /**
-     * The required columns for an error message, e.g. "Date (Ամսաթիվ), Description (Նկարագրություն), …".
-     */
     public static String expected() {
         return Arrays.stream(Column.values())
                 .filter(column -> column.required)
@@ -89,9 +86,6 @@ public final class EvocaColumns {
                 .collect(Collectors.joining(", "));
     }
 
-    /**
-     * Label text as matched: NFKC, whitespace collapsed and trimmed, lowercase without locale.
-     */
     static String normalizeLabel(String text) {
         String normalized = Normalizer.normalize(text, Normalizer.Form.NFKC);
         return WHITESPACE.matcher(normalized).replaceAll(" ").strip().toLowerCase(Locale.ROOT);
