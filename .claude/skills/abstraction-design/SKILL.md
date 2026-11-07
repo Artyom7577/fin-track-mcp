@@ -34,7 +34,7 @@ These already passed the gate; don't relitigate them, and don't treat them as pr
 | `StatementParser` (application port) | #4 + #1 | Hexagonal port with two MVP adapters (`EvocaXlsxParser`, `GenericCsvParser`) and planned more (`AmeriaParser`, `PdfParser`); `ParserFactory` dispatches over them |
 | `TransactionRepository` (application port) | #4 | Hexagonal port; keeps JDBC/SQLite out of the application, planned second adapter (Postgres), in-memory double in tests |
 | `ExchangeRateProvider` (application port) | #4 | Strategy at a seam: `FixedRateProvider` now, `CbaRateProvider` + cache planned |
-| `CategorizationRule` (domain) | #1 | The chain iterates a `List<CategorizationRule>` — `OverrideRule`, `MerchantRule`, `KeywordRule`, later ML |
+| `CategorizationRule` (domain) | #1 | The chain iterates a `List<CategorizationRule>` — `MerchantOverrideRule`, `KnownMerchantRule`, `KeywordRule`, later ML |
 | `sealed RowResult` = `Imported \| Duplicate \| Rejected` | #2 | Closed outcome set; `ImportService` folds it exhaustively into `ImportSummary` |
 | `sealed FinanceException` + subtypes | #2 | Closed failure set; the MCP layer maps each subtype to an actionable tool error |
 

@@ -59,8 +59,8 @@ Facade, Value Object, DI) are decided — apply them, don't relitigate them.
   server module's wiring.
 - **Chain of Responsibility** — categorization: an ordered `List<CategorizationRule>`, each
   `Optional<Category> apply(Transaction)`; empty means "ask the next rule", first answer wins, the
-  chain ends in a fallback to `OTHER`. Order is `OverrideRule` → `MerchantRule` → `KeywordRule` →
-  fallback. Each rule is individually testable; a new heuristic is a new link, not a new branch in
+  chain ends in a fallback to `OTHER`. Order is `MerchantOverrideRule` → `KnownMerchantRule` → `KeywordRule` (YAML
+  before defaults for both) → fallback. Each rule is individually testable; a new heuristic is a new link, not a new branch in
   one 80-line method. See `categorization-rules`.
 - **Sealed type + exhaustive switch (algebraic result)** — model a closed set of outcomes as a
   `sealed interface` permitting `record`s, matched with a `switch` that has **no** `default`:

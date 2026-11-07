@@ -169,6 +169,17 @@ Bank descriptions look like `POS 4578****1234 SAS SUPERMARKET YEREVAN AM`.
 
 Table-test both with real-shaped (fake) strings, including Armenian and Cyrillic text.
 
+## Test input (from `mockdata`)
+
+Parser tests generate their input with `mockdata` (test scope: `Scenarios`, `StatementGenerator`, a writer into
+`@TempDir`) and compare parsed rows with the `GeneratedStatement`; error tests use `Scenarios.withMalformedRows()`
+and assert the reported line number (list position + 1 header row). Mock XLSX uses real date and numeric cells,
+malformed values as text cells; CSV is all text, UTF-8 with BOM. Because writer and parser could share a wrong
+assumption, the parser module also keeps a few small **hand-made** files in its own test resources for what the
+writer never produces: header not on row 1, trailing totals, **blank trailing rows**, blank lines. Any full card
+number in a description is masked (`CardNumberMasker`) **before** the row is stored or hashed — test it with a
+runtime-built number, never a 16-digit literal. An anonymized real sample becomes one more test when available.
+
 ## Adding a new bank (checklist)
 
 1. `grill-me` — get a sample export (anonymized) and the column semantics (sign vs debit/credit, date format).

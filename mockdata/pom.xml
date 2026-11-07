@@ -13,6 +13,11 @@
     <name>mockdata</name>
     <description>Deterministic generator of fake Evoca-style statements for tests and demos.</description>
 
+    <properties>
+        <!-- A property, not plugin config, so -Dexec.mainClass=...GenerateGoldenSample can override it. -->
+        <exec.mainClass>com.artyomh.finance.mockdata.cli.GenerateMockData</exec.mainClass>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.artyomh</groupId>
@@ -26,5 +31,32 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-csv</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <configuration>
+                    <skip>false</skip>
+                    <arguments>
+                        <argument>${maven.multiModuleProjectDirectory}</argument>
+                    </arguments>
+                    <systemProperties>
+                        <!-- POI logs through Log4j API; without a provider it prints a startup error to stderr. -->
+                        <systemProperty>
+                            <key>log4j2.statusLoggerLevel</key>
+                            <value>OFF</value>
+                        </systemProperty>
+                    </systemProperties>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

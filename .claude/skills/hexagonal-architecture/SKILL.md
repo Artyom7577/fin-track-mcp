@@ -38,7 +38,8 @@ Arrows are Maven `<dependency>` edges and **only point down**. Three invariants:
    know about parsers. Cross-adapter needs go through an application port.
 
 Plus: `application` imports only `domain` and the JDK. `mockdata` depends on
-domain only (tests in other modules use it with `<scope>test</scope>`).
+domain, POI and Commons CSV only (tests in other modules use it with `<scope>test</scope>`); inside it,
+`writer` → `generator` → `scenario`, and nothing depends on `cli`.
 
 ## Ports and adapters
 
@@ -50,7 +51,7 @@ needs — not what the technology offers. An **adapter** implements it in an out
 | `StatementParser` | application | `boolean supports(StatementHeader h)`; `ParsedStatement parse(Path file)` | `EvocaXlsxParser`, `GenericCsvParser` | `AmeriaParser`, `PdfParser` |
 | `TransactionRepository` | application | `int saveAll(List<Transaction>)` (skips existing ids), `List<Transaction> findByMonth(YearMonth)`, `Optional<MonthRange> availableMonths()` … | `SqliteTransactionRepository` | Postgres |
 | `ExchangeRateProvider` | application | `ExchangeRate rateFor(Currency from, LocalDate date)` | `FixedRateProvider` | `CbaRateProvider` + cache |
-| `CategorizationRule` | domain | `Optional<Category> apply(Transaction tx)` | `OverrideRule`, `MerchantRule`, `KeywordRule`, fallback | ML rule |
+| `CategorizationRule` | domain | `Optional<Category> apply(Transaction tx)` | `MerchantOverrideRule`, `KnownMerchantRule`, `KeywordRule`, fallback | ML rule |
 
 Port rules:
 
@@ -75,7 +76,7 @@ Port rules:
 | A new rate source | `adapter-fx` implementing `ExchangeRateProvider` | `money-and-fx` |
 | A tool / resource / config / bean wiring | `mcp-server` | `mcp-server-tools` |
 | Tunable (limits, thresholds, rate, paths) | `@ConfigurationProperties` record in server; passed into the plain class's constructor as a domain record | never read env in domain |
-| Fake statements, fixtures | `mockdata` | fixed seed |
+| Fake statements (scenario, generator, writers, CLI) | `mockdata` | fixed seed + fixed `Clock` |
 
 If a class "needs" something from a sibling adapter, the design is wrong: lift the need into an application
 port and let the server wire both sides.
@@ -94,12 +95,12 @@ So: no `@Service`, `@Component`, `@Transactional`, `@Value` in domain/applicatio
 public class FinanceBeans {
 
     @Bean
-    CategorizationChain categorizationChain(CategoryOverrides overrides, CategorizationProperties props) {
-        return new CategorizationChain(List.of(
-                new OverrideRule(overrides),
-                new MerchantRule(props.merchants()),
+    CategorizerFactory categorizerFactory(CategoryOverrideRepository overrides, CategorizationProperties props) {
+        return new CategorizerFactory(overrides, List.of(
+                new KnownMerchantRule(props.merchants()),
+                new KnownMerchantRule(DefaultCategorizationData.knownMerchants()),
                 new KeywordRule(props.keywords()),
-                new FallbackRule()));
+                new KeywordRule(DefaultCategorizationData.keywords())));
     }
 
     @Bean

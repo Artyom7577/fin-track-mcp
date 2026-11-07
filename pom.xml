@@ -49,6 +49,8 @@
         <poi.version>5.5.1</poi.version>
         <commons-csv.version>1.14.1</commons-csv.version>
         <archunit.version>1.5.1</archunit.version>
+        <!-- exec:java validates mainClass before honouring skip; modules that run it (mockdata) override this. -->
+        <exec.mainClass>none</exec.mainClass>
         <!-- sqlite-jdbc, Flyway, JUnit and AssertJ versions come from the Spring Boot BOM. -->
     </properties>
 
@@ -124,4 +126,19 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Version from the Spring Boot parent; skipped everywhere except mockdata, so -am stays harmless. -->
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <configuration>
+                        <skip>true</skip>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 </project>

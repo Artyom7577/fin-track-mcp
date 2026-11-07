@@ -2,7 +2,7 @@
 name: categorization-rules
 description: >-
   Invoke BEFORE writing or changing how transactions get a category or are analysed in fin-track-mcp:
-  the CategorizationRule chain (OverrideRule → MerchantRule → KeywordRule → fallback), keyword and
+  the CategorizationRule chain (MerchantOverrideRule → KnownMerchantRule → KeywordRule, YAML before DefaultCategorizationData → fallback), keyword and
   merchant lists, whole-word matching and text normalization, Category/Direction consistency,
   set_category and the category_overrides table, re-categorizing existing rows, subscription detection
   (find_subscriptions) and unusual-transaction detection (unusual_transactions) with their thresholds.
@@ -31,10 +31,15 @@ Order = priority; first non-empty answer wins:
 
 | # | Rule | Answers when | Source |
 |---|---|---|---|
-| 1 | `OverrideRule` | the user set a category for this merchant | `category_overrides` (via a domain-facing lookup port) |
-| 2 | `MerchantRule` | normalized merchant is a known exact name (`YEREVAN CITY` → GROCERIES) | config |
-| 3 | `KeywordRule` | a keyword occurs as a **whole word** (`SUPERMARKET` → GROCERIES) | config |
-| 4 | `FallbackRule` | always | `OTHER` for EXPENSE, `OTHER_INCOME` for INCOME |
+| 1 | `MerchantOverrideRule` | the user set a category for this merchant | `category_overrides` (`CategoryOverrideRepository`) |
+| 2 | `KnownMerchantRule` (YAML) | normalized merchant is a configured exact name | `finance.categorization.merchants` |
+| 3 | `KnownMerchantRule` (defaults) | normalized merchant is a built-in exact name (`YEREVAN CITY` → GROCERIES) | `DefaultCategorizationData.knownMerchants()` |
+| 4 | `KeywordRule` (YAML) | a configured keyword occurs as a **whole word** | `finance.categorization.keywords` |
+| 5 | `KeywordRule` (defaults) | a built-in keyword occurs as a whole word (`SUPERMARKET` → GROCERIES) | `DefaultCategorizationData.keywords()` |
+| 6 | fallback | always | `Category.fallbackFor(direction)`: `OTHER` / `OTHER_INCOME` |
+
+YAML extras sit before the defaults so custom rules win. The defaults are domain code (pure data) so the
+`application` categorization coverage test runs against what production uses.
 
 ```java
 public final class CategorizationChain {
@@ -91,20 +96,31 @@ private static Pattern wholeWord(String normalizedKeyword) {
 each spelling as its own keyword — explicit and testable. Automatic transliteration is lossy and ambiguous; if
 added later it is one more normalization step behind the same rule API (grill first).
 
-Config sketch (server module, bound to a record, converted to domain maps):
+Config sketch (server module, bound to a record, converted to domain maps). These are **extras** on top of
+`DefaultCategorizationData`; the properties record uppercases merchant names and keywords with `Locale.ROOT` on
+load, and an unknown category name fails at startup with a message listing all 16 valid categories
+("Unknown category 'FOOD' in finance.categorization.keywords. Valid: SALARY, FREELANCE, …"), written to the log
+file / stderr so a Claude Desktop user can see why the server did not start. **Bracket every merchant key**: Spring
+Boot's map binding drops spaces and other punctuation and treats `.` as nesting, so an unbracketed
+`MY LANDLORD LLC` binds as `MYLANDLORDLLC` and never matches — add a binding test with the properties record:
 
 ```yaml
 finance:
   categorization:
     merchants:
-      YEREVAN CITY: GROCERIES
-      OPENAI: SUBSCRIPTIONS
+      "[MY LANDLORD LLC]": RENT
+      "[SHOP.EXAMPLE.AM]": SHOPPING
     keywords:
-      GROCERIES: [SUPERMARKET, YEREVAN CITY, SAS]
-      UTILITIES: [ENA, VEOLIA, GAZPROM]
-      CAFES_RESTAURANTS: [CAFE, COFFEE, BOLT FOOD]
-      TRANSPORT: [BOLT, YANDEX GO, GG TAXI]
+      CAFES_RESTAURANTS: [LAVASH]
+      TRANSPORT: [MAX PETROL]
 ```
+
+`CategorizerFactory(overrides, List<CategorizationRule>)` takes the ordered rules — YAML merchants, default
+merchants, YAML keywords, default keywords — and `create()` puts the reloaded `MerchantOverrideRule` first.
+
+**Known limitation:** a refund is INCOME from an expense merchant, so the direction check skips the merchant's
+category and it lands in `OTHER_INCOME` — it counts as income, not as a reduction of the original category
+(later: a `REFUNDS` category or netting; grill first).
 
 ## set_category (overrides)
 
@@ -119,7 +135,7 @@ finance:
    `UPDATE transactions SET category = :category WHERE merchant = :merchant AND direction = :direction`.
 5. Return `CategoryChange(merchant, category, rowsUpdated)`. Idempotent: repeating it updates the same rows.
 
-Future imports pick the override up through `OverrideRule`. Overrides are per normalized merchant — never per
+Future imports pick the override up through `MerchantOverrideRule` (`CategorizerFactory.create()` reloads it). Overrides are per normalized merchant — never per
 transaction id, never a new category.
 
 ## Subscription detection (`find_subscriptions`)
